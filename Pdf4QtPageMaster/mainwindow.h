@@ -69,6 +69,8 @@ public:
         Copy,
         Paste,
 
+        SearchText,
+
         RotateLeft,
         RotateRight,
 
