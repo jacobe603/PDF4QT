@@ -15,10 +15,11 @@
 4. [Build System and Dependencies](#build-system-and-dependencies)
 5. [Coding Conventions](#coding-conventions)
 6. [Development Workflows](#development-workflows)
-7. [Testing](#testing)
-8. [Key Components Reference](#key-components-reference)
-9. [Common Development Tasks](#common-development-tasks)
-10. [AI Assistant Guidelines](#ai-assistant-guidelines)
+7. [AI Assistant Development Environment](#ai-assistant-development-environment)
+8. [Testing](#testing)
+9. [Key Components Reference](#key-components-reference)
+10. [Common Development Tasks](#common-development-tasks)
+11. [AI Assistant Guidelines](#ai-assistant-guidelines)
 
 ---
 
@@ -532,6 +533,390 @@ See `Release_Process.txt` for official release procedures.
 - `CMakeLists.txt`: Line 25: `set(PDF4QT_VERSION 1.5.2.0)`
 - `vcpkg.json`: `version-string: "1.5.2"`
 - `version.txt.in`: Template for version file
+
+---
+
+## AI Assistant Development Environment
+
+This section describes how AI assistants can set up a complete build and test environment for working with the PDF4QT codebase. This enables real compilation, testing, and debugging capabilities.
+
+### Environment Capabilities Assessment
+
+**Current Requirements Check:**
+```bash
+# Required tools:
+cmake --version      # Need: 3.16+
+gcc --version        # Need: GCC 11+ (or MSVC 2022, MinGW 11.2+)
+which Xvfb          # For headless GUI testing (Linux)
+
+# Not typically pre-installed:
+# - Qt 6.9+
+# - vcpkg package manager
+# - Third-party dependencies (OpenSSL, Blend2D, etc.)
+```
+
+### Full Development Environment Setup
+
+This is the **RECOMMENDED** approach for AI assistants working on feature development, as it enables full compile-test-debug cycles.
+
+#### Time Investment
+- **Initial Setup**: 60-90 minutes (one-time)
+- **Incremental Builds**: 10-60 seconds per change
+- **Disk Space**: ~5GB
+
+#### Benefits
+✅ See real compiler errors and warnings
+✅ Run unit tests immediately
+✅ Test command-line tools (PdfTool)
+✅ Run GUI applications headlessly (Xvfb)
+✅ Catch runtime bugs and segfaults
+✅ Fast iteration with incremental compilation
+✅ Complete verification before pushing code
+
+### Step-by-Step Setup Process
+
+The repository includes a `Dockerfile` that documents the complete setup process. Follow these steps:
+
+#### 1. Install vcpkg Package Manager
+
+```bash
+# Clone vcpkg
+cd /opt  # or your preferred location
+git clone https://github.com/Microsoft/vcpkg.git
+cd vcpkg
+
+# Bootstrap
+./bootstrap-vcpkg.sh -disableMetrics
+
+# Set environment variable
+export VCPKG_ROOT=/opt/vcpkg
+echo 'export VCPKG_ROOT=/opt/vcpkg' >> ~/.bashrc
+```
+
+**Time**: ~5 minutes
+
+#### 2. Install Qt 6.9.1
+
+```bash
+# Install aqtinstall (Qt installer)
+pip3 install aqtinstall
+
+# Install Qt 6.9.1 with required modules
+aqt install-qt linux desktop 6.9.1 linux_gcc_64 \
+    -O /opt/Qt \
+    -m qtmultimedia qtspeech
+
+# Set environment variables
+export PATH=/opt/Qt/6.9.1/gcc_64/bin:$PATH
+export CMAKE_PREFIX_PATH=/opt/Qt/6.9.1/gcc_64/lib/cmake
+export PDF4QT_QT_ROOT=/opt/Qt/6.9.1/gcc_64
+export LD_LIBRARY_PATH=/opt/Qt/6.9.1/gcc_64/lib:$LD_LIBRARY_PATH
+export QT_QPA_PLATFORM=offscreen  # For headless GUI
+
+# Add to shell profile
+cat >> ~/.bashrc << 'EOF'
+export PATH=/opt/Qt/6.9.1/gcc_64/bin:$PATH
+export CMAKE_PREFIX_PATH=/opt/Qt/6.9.1/gcc_64/lib/cmake
+export PDF4QT_QT_ROOT=/opt/Qt/6.9.1/gcc_64
+export LD_LIBRARY_PATH=/opt/Qt/6.9.1/gcc_64/lib:$LD_LIBRARY_PATH
+export QT_QPA_PLATFORM=offscreen
+EOF
+
+source ~/.bashrc
+```
+
+**Time**: ~15-20 minutes
+
+#### 3. Install System Dependencies
+
+```bash
+# Ubuntu/Debian
+sudo apt update && sudo apt install -y \
+    build-essential cmake ninja-build \
+    libfontconfig-dev \
+    libxcb-cursor0 libxcb-xinerama0 \
+    libxkbcommon-x11-0 libx11-xcb1 \
+    libopengl-dev libgl1-mesa-dev \
+    xvfb
+
+# Note: Other distributions may need different packages
+```
+
+**Time**: ~2-5 minutes
+
+#### 4. Install PDF4QT Dependencies via vcpkg
+
+```bash
+cd $VCPKG_ROOT
+
+# Install all required dependencies
+./vcpkg install \
+    tbb \
+    openssl \
+    lcms \
+    zlib \
+    openjpeg \
+    freetype \
+    libjpeg-turbo \
+    libpng \
+    blend2d
+
+# This will take the longest time as it builds from source
+```
+
+**Time**: ~30-60 minutes (builds from source)
+
+**Note**: vcpkg caches built packages, so subsequent installs are much faster.
+
+#### 5. Configure PDF4QT Build
+
+```bash
+# Navigate to PDF4QT repository
+cd /path/to/PDF4QT
+
+# Set overlay ports (IMPORTANT for libpng compatibility on Linux)
+export VCPKG_OVERLAY_PORTS=$(pwd)/vcpkg/overlays
+
+# Configure with CMake
+cmake -B build -S . \
+    -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_VCPKG_BUILD_TYPE=Release \
+    -DPDF4QT_INSTALL_QT_DEPENDENCIES=0 \
+    -DVCPKG_OVERLAY_PORTS=vcpkg/overlays \
+    -DPDF4QT_QT_ROOT=$PDF4QT_QT_ROOT \
+    -DCMAKE_INSTALL_PREFIX=/
+
+# Check for configuration errors
+```
+
+**Time**: ~2-5 minutes
+
+#### 6. Build PDF4QT
+
+```bash
+# Build with parallel jobs (adjust -j based on CPU cores)
+cmake --build build -j$(nproc)
+
+# Build translations
+cmake --build build --target release_translations -j$(nproc)
+
+# Optional: Install to system
+sudo cmake --install build
+```
+
+**Time**: ~10-30 minutes (initial build), then 10-60 seconds (incremental)
+
+### What You Can Do After Setup
+
+#### Compilation and Error Detection
+
+```bash
+# Make changes to source code
+vim Pdf4QtLibCore/sources/pdfobject.cpp
+
+# Incremental rebuild (very fast)
+cmake --build build -j$(nproc)
+
+# See compiler errors immediately:
+# - Syntax errors
+# - Type mismatches
+# - Linker errors
+# - Template instantiation issues
+# - Missing includes
+```
+
+#### Unit Testing
+
+```bash
+# Run all unit tests
+cd build
+ctest
+
+# Or run specific test
+./UnitTests/tst_lexicalanalyzertest
+
+# See test output:
+# - PASS/FAIL for each test
+# - Assertion failures
+# - Segmentation faults
+# - Memory errors (with valgrind)
+```
+
+#### Command-Line Tool Testing
+
+```bash
+# Test PdfTool commands
+./build/bin/PdfTool --help
+./build/bin/PdfTool info document.pdf
+./build/bin/PdfTool optimize input.pdf output.pdf
+./build/bin/PdfTool unite output.pdf input1.pdf input2.pdf
+
+# See:
+# - Command execution
+# - Error messages
+# - Exit codes
+# - Output files
+```
+
+#### GUI Application Testing (Headless)
+
+```bash
+# Run GUI applications without display (using Xvfb)
+xvfb-run ./build/bin/Pdf4QtViewer document.pdf
+xvfb-run ./build/bin/Pdf4QtEditor document.pdf
+xvfb-run ./build/bin/Pdf4QtDiff doc1.pdf doc2.pdf
+
+# Detect:
+# - Startup crashes
+# - Runtime errors
+# - Assertion failures
+# - Log output
+# - Qt warnings
+
+# Note: No visual feedback, but can detect crashes and errors
+```
+
+#### Debugging
+
+```bash
+# Build with debug symbols
+cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug [other options...]
+cmake --build build -j$(nproc)
+
+# Run with gdb
+gdb --args ./build/bin/PdfTool info document.pdf
+
+# Run with valgrind for memory errors
+valgrind --leak-check=full ./build/bin/PdfTool info document.pdf
+```
+
+### Typical Development Workflow
+
+```bash
+# 1. Make code changes
+vim Pdf4QtLibCore/sources/pdfdocument.cpp
+
+# 2. Build (fast incremental)
+cmake --build build -j$(nproc)
+# Output: [ 97%] Building CXX object ...
+#         [100%] Linking CXX shared library ...
+
+# 3. Run tests
+./build/UnitTests/tst_lexicalanalyzertest
+# Output: ********* Start testing of ... *********
+#         PASS   : ...
+#         Totals: 25 passed, 0 failed, 0 skipped
+
+# 4. Test with real PDF
+./build/bin/PdfTool info test.pdf
+# See actual output and any errors
+
+# 5. Commit when all tests pass
+git add .
+git commit -m "Issue #XXX: Feature description"
+git push
+```
+
+### Alternative: Core Library Only
+
+For faster setup when only working on LibCore (no GUI):
+
+```bash
+cmake -B build -S . \
+    -DPDF4QT_BUILD_ONLY_CORE_LIBRARY=ON \
+    [other options...]
+
+# Benefits:
+# - Faster initial build (~5-10 min)
+# - Smaller disk usage (~2GB)
+# - Can still test PdfTool and unit tests
+
+# Limitations:
+# - No GUI applications
+# - No plugin testing
+# - No LibWidgets/LibGui testing
+```
+
+### Troubleshooting
+
+#### Qt Not Found
+```bash
+# Ensure Qt paths are set
+echo $PATH | grep Qt
+echo $CMAKE_PREFIX_PATH
+
+# Verify Qt installation
+qmake --version
+```
+
+#### vcpkg Packages Not Found
+```bash
+# Check vcpkg integration
+$VCPKG_ROOT/vcpkg integrate install
+
+# List installed packages
+$VCPKG_ROOT/vcpkg list
+```
+
+#### libpng Crashes (Linux)
+```bash
+# MUST set VCPKG_OVERLAY_PORTS
+export VCPKG_OVERLAY_PORTS=/path/to/PDF4QT/vcpkg/overlays
+
+# Verify it's set during cmake configure
+cmake -B build -S . -DVCPKG_OVERLAY_PORTS=vcpkg/overlays [...]
+```
+
+#### Build Errors
+```bash
+# Clean build directory
+rm -rf build
+cmake -B build -S . [options...]
+
+# Verbose build output
+cmake --build build -j$(nproc) --verbose
+```
+
+### Performance Considerations
+
+- **Initial Setup**: One-time cost of 60-90 minutes
+- **Incremental Builds**: Typically 10-60 seconds for small changes
+- **Full Rebuilds**: ~10-30 minutes (rarely needed)
+- **Disk Space**: ~5GB for complete setup
+- **Memory**: 4GB+ recommended for parallel builds
+
+### When to Use This Setup
+
+**Highly Recommended For:**
+- Adding new features to LibCore
+- Modifying existing functionality
+- Fixing bugs that need reproduction
+- Performance optimization work
+- Refactoring large sections of code
+- Plugin development
+
+**Optional For:**
+- Documentation updates
+- Minor comment changes
+- Simple configuration file edits
+- Quick code reviews
+
+### Comparison: With vs Without Compilation
+
+| Task | Without Compilation | With Compilation |
+|------|---------------------|------------------|
+| **Setup Time** | 0 minutes | 90 minutes |
+| **Catch Syntax Errors** | ❌ No | ✅ Immediate |
+| **Catch Linker Errors** | ❌ No | ✅ Immediate |
+| **Run Unit Tests** | ❌ No | ✅ Yes |
+| **Test PdfTool** | ❌ No | ✅ Yes |
+| **Debug Crashes** | ❌ No | ✅ Yes |
+| **Verify Changes** | ❌ Manual | ✅ Automated |
+| **Iterations per Fix** | 3-5 | 1 |
+| **Confidence Level** | Low | High |
+
+**Break-even Point**: After 3-4 features, compilation setup pays for itself in time saved.
 
 ---
 
