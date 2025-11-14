@@ -924,6 +924,26 @@ if %ERRORLEVEL% EQU 0 (
 
 ---
 
+## Quick Reference Card
+
+| Task | Command |
+|------|---------|
+| **Get help** | `PdfTool help` or `PdfTool <command> --help` |
+| **Document info** | `PdfTool info document.pdf` |
+| **Extract pages 2-5 (separate)** | `PdfTool separate doc.pdf page_%.pdf --page-select "2-5"` |
+| **Extract all pages** | `PdfTool separate doc.pdf page_%.pdf` |
+| **Merge PDFs** | `PdfTool unite output.pdf doc1.pdf doc2.pdf doc3.pdf` |
+| **Optimize file** | `PdfTool optimize large.pdf --flags all` |
+| **Extract text** | `PdfTool fetch-text doc.pdf > output.txt` |
+| **Extract images** | `PdfTool fetch-images doc.pdf --output-directory ./images` |
+| **Render to PNG** | `PdfTool render-to-images doc.pdf --image-export-dir ./out` |
+| **Encrypt** | `PdfTool encrypt doc.pdf --algorithm aes-256 --user-password "pass"` |
+| **Decrypt** | `PdfTool decrypt doc.pdf --password "pass"` |
+| **Verify signatures** | `PdfTool verify-signatures signed.pdf` |
+| **Compare docs** | `PdfTool diff doc1.pdf doc2.pdf` |
+
+---
+
 ## Tips and Best Practices
 
 ### 1. Always Backup Originals
@@ -938,6 +958,7 @@ PdfTool optimize important.pdf --flags all
 
 ```bash
 # Get all options for a command
+PdfTool separate --help
 PdfTool render-to-images --help
 ```
 
@@ -955,7 +976,7 @@ PdfTool info document.pdf --output-style xml | xmllint --format -
 
 ```bash
 # Test on first page before processing all pages
-PdfTool render-to-images huge.pdf --pages "1" --resolution-dpi 600
+PdfTool render-to-images huge.pdf --page-select "1" --image-export-res-dpi 600
 ```
 
 ### 5. Combine with Other Tools
