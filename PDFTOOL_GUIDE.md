@@ -317,32 +317,56 @@ Merge multiple PDFs into one
 PdfTool unite <output.pdf> <input1.pdf> <input2.pdf> [...]
 ```
 
-**Options**:
-- `--pages <range>` - Select pages from each input (e.g., "1-10")
+**Arguments**:
+- `<output.pdf>` - Target merged PDF (must not exist)
+- `<input1.pdf> <input2.pdf> ...` - Source PDFs to merge (minimum 2 required)
+
+**Note**: Currently does NOT support page selection. To merge specific pages:
+1. Use `separate` to extract desired pages first
+2. Then `unite` the extracted files
 
 **Example**:
 ```bash
+# Merge entire documents
 PdfTool unite merged.pdf file1.pdf file2.pdf file3.pdf
+
+# To merge specific page ranges (two-step process):
+# Step 1: Extract pages
+PdfTool separate doc1.pdf temp1_%.pdf --page-select "1-5"
+PdfTool separate doc2.pdf temp2_%.pdf --page-select "10-15"
+# Step 2: Merge extracted pages
+PdfTool unite combined.pdf temp1_*.pdf temp2_*.pdf
 ```
 
 #### `separate`
 Split PDF into multiple files
 
 ```bash
-PdfTool separate <input.pdf> [--pattern <pattern>]
+PdfTool separate <input.pdf> <pattern> [options]
 ```
 
-**Options**:
-- `--pattern <pattern>` - Output filename pattern (e.g., "page_%PageNo%.pdf")
-- `--pages <range>` - Pages to extract
+**Arguments**:
+- `<input.pdf>` - Source PDF file
+- `<pattern>` - Output filename pattern (must contain `%` for page number)
 
-**Pattern Variables**:
-- `%PageNo%` - Page number
-- `%FileName%` - Original filename
+**Options**:
+- `--page-select <range>` - Pages to extract (e.g., "1-10,15,20-25")
+- `--page-first <number>` - First page of range
+- `--page-last <number>` - Last page of range
+
+**Pattern Substitution**:
+- `%` is replaced with page number (e.g., `page_%.pdf` → `page_5.pdf`)
 
 **Example**:
 ```bash
-PdfTool separate document.pdf --pattern "page_%PageNo%.pdf"
+# Extract pages 2-5 as separate PDFs
+PdfTool separate document.pdf page_%.pdf --page-select "2-5"
+
+# Extract all pages (creates page_1.pdf, page_2.pdf, etc.)
+PdfTool separate document.pdf page_%.pdf
+
+# Extract using first/last
+PdfTool separate document.pdf page_%.pdf --page-first 10 --page-last 20
 ```
 
 #### `redact`
@@ -422,24 +446,27 @@ PdfTool ink-coverage printfile.pdf --pages "1-10"
 Extract text from PDF
 
 ```bash
-PdfTool fetch-text <file.pdf>
+PdfTool fetch-text <file.pdf> [options]
 ```
 
 **Options**:
-- `--algorithm <alg>` - Text extraction algorithm:
+- `--text-analysis-alg <alg>` - Text extraction algorithm:
   - `auto` - Automatic (default)
   - `layout` - Preserve layout
   - `content` - Content stream order
   - `structure` - Use structure tree
-- `--pages <range>` - Extract from specific pages
-- `--show-page-numbers` - Prefix with page numbers
-- `--show-struct-titles` - Show structure titles
-- `--show-alt-description` - Show alternative descriptions
-- `--show-actual-text` - Show actual text from tags
+- `--page-select <range>` - Extract from specific pages
+- `--text-show-page-numbers` - Prefix with page numbers
+- `--text-show-struct-title` - Show structure titles
+- `--text-show-struct-alt-desc` - Show alternative descriptions
+- `--text-show-struct-act-text` - Show actual text from tags
 
 **Example**:
 ```bash
-PdfTool fetch-text document.pdf --algorithm layout --show-page-numbers > output.txt
+PdfTool fetch-text document.pdf --text-analysis-alg layout --text-show-page-numbers > output.txt
+
+# Extract from specific pages
+PdfTool fetch-text document.pdf --page-select "1-10" --text-analysis-alg layout > output.txt
 ```
 
 #### `fetch-images`
@@ -450,9 +477,9 @@ PdfTool fetch-images <file.pdf> [options]
 ```
 
 **Options**:
-- `--pages <range>` - Extract from specific pages
-- `--output-directory <dir>` - Where to save images
-- `--image-format <fmt>` - Output format (png, jpg, bmp, etc.)
+- `--page-select <range>` - Extract from specific pages
+- `--output-directory <dir>` - Where to save images (default: current directory)
+- `--image-format <fmt>` - Output format (png, jpg, bmp, tiff)
 - `--image-quality <0-100>` - JPEG quality (default: 85)
 
 **Example**:
@@ -460,7 +487,7 @@ PdfTool fetch-images <file.pdf> [options]
 PdfTool fetch-images document.pdf \
     --output-directory ./images \
     --image-format png \
-    --pages "1-10"
+    --page-select "1-10"
 ```
 
 #### `attachments`
@@ -494,28 +521,22 @@ PdfTool render-to-images <file.pdf> [options]
 ```
 
 **Options**:
-- `--pages <range>` - Pages to render
-- `--output-directory <dir>` - Output directory
-- `--output-filename <pattern>` - Filename pattern (default: "page_%PageNo%.png")
-- `--image-format <fmt>` - Format (png, jpg, tiff, etc.)
-- `--resolution-dpi <dpi>` - Resolution (default: 300)
+- `--page-select <range>` - Pages to render
+- `--image-export-dir <dir>` - Output directory
+- `--image-export-filename <pattern>` - Filename pattern with `%` for page number
+- `--image-format <fmt>` - Format (png, jpg, tiff, bmp)
+- `--image-export-res-dpi <dpi>` - Resolution (default: 300)
 - `--image-quality <0-100>` - JPEG quality
-- `--msaa-samples <n>` - Anti-aliasing samples (1, 2, 4, 8, 16)
-- `--render-flags <flags>` - Rendering features to enable/disable
-
-**Render Flags**:
-- `antialiasing`, `text-antialiasing`, `smooth-pictures`
-- `ignore-optional-content`, `clip-to-crop-box`
-- `display-annotations`, `display-times`
+- `--render-msaa-samples <n>` - Anti-aliasing samples (1, 2, 4, 8, 16)
 
 **Example**:
 ```bash
 PdfTool render-to-images document.pdf \
-    --pages "1-5" \
-    --resolution-dpi 600 \
+    --page-select "1-5" \
+    --image-export-res-dpi 600 \
     --image-format png \
-    --output-directory ./renders \
-    --msaa-samples 4
+    --image-export-dir ./renders \
+    --render-msaa-samples 4
 ```
 
 #### `create-bitonaldocument`
@@ -707,17 +728,20 @@ PdfTool optimize document.pdf \
     --flags "remove-unused-objects,compress-content-streams,merge-identical-objects"
 ```
 
-### Example 3: Merge PDFs with Page Selection
+### Example 3: Extract and Merge Specific Pages
 
 ```bash
-# Merge first 10 pages of each
-PdfTool unite output.pdf file1.pdf file2.pdf file3.pdf --pages "1-10"
+# Extract pages from multiple documents, then merge
+# Step 1: Extract desired pages
+PdfTool separate doc1.pdf doc1_page_%.pdf --page-select "1-5"
+PdfTool separate doc2.pdf doc2_page_%.pdf --page-select "10-15"
 
-# Merge specific pages
-PdfTool unite combined.pdf \
-    doc1.pdf --pages "1-5" \
-    doc2.pdf --pages "10-20" \
-    doc3.pdf --pages "1,5,10"
+# Step 2: Merge extracted pages
+PdfTool unite combined.pdf doc1_page_*.pdf doc2_page_*.pdf
+
+# Or for a single document - extract and merge range:
+PdfTool separate book.pdf chapter_%.pdf --page-select "10-50"
+PdfTool unite chapter.pdf chapter_*.pdf
 ```
 
 ### Example 4: Extract and Convert Text
@@ -727,10 +751,10 @@ PdfTool unite combined.pdf \
 PdfTool fetch-text document.pdf --algorithm layout > output.txt
 
 # Extract with page numbers
-PdfTool fetch-text document.pdf --show-page-numbers --algorithm layout > numbered.txt
+PdfTool fetch-text document.pdf --text-show-page-numbers --algorithm layout > numbered.txt
 
 # Extract from specific pages
-PdfTool fetch-text large.pdf --pages "1-100" --algorithm layout > first100.txt
+PdfTool fetch-text large.pdf --page-select "1-100" --algorithm layout > first100.txt
 ```
 
 ### Example 5: Encrypt with Permissions
@@ -755,18 +779,18 @@ PdfTool encrypt document.pdf \
 ```bash
 # Render at print quality (600 DPI)
 PdfTool render-to-images presentation.pdf \
-    --resolution-dpi 600 \
+    --image-export-res-dpi 600 \
     --image-format png \
-    --msaa-samples 8 \
-    --output-directory ./high-res \
-    --pages "1-20"
+    --render-msaa-samples 8 \
+    --image-export-dir ./high-res \
+    --page-select "1-20"
 
 # Render for web (150 DPI, JPEG)
 PdfTool render-to-images document.pdf \
-    --resolution-dpi 150 \
+    --image-export-res-dpi 150 \
     --image-format jpg \
     --image-quality 85 \
-    --output-directory ./web
+    --image-export-dir ./web
 ```
 
 ### Example 7: Batch Processing Script
