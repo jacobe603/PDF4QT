@@ -25,6 +25,7 @@
 
 #include "aboutdialog.h"
 #include "assembleoutputsettingsdialog.h"
+#include "searchdialog.h"
 #include "selectoutlinetoregroupdialog.h"
 
 #include "pdfaction.h"
@@ -77,6 +78,7 @@ MainWindow::MainWindow(QWidget* parent) :
     ui->actionCut->setData(int(Operation::Cut));
     ui->actionCopy->setData(int(Operation::Copy));
     ui->actionPaste->setData(int(Operation::Paste));
+    ui->actionSearchText->setData(int(Operation::SearchText));
     ui->actionRotate_Left->setData(int(Operation::RotateLeft));
     ui->actionRotate_Right->setData(int(Operation::RotateRight));
     ui->actionGroup->setData(int(Operation::Group));
@@ -478,6 +480,7 @@ bool MainWindow::canPerformOperation(Operation operation) const
         case Operation::InsertImage:
         case Operation::InsertEmptyPage:
         case Operation::InsertPDF:
+        case Operation::SearchText:
         case Operation::GetSource:
         case Operation::BecomeSponsor:
         case Operation::About:
@@ -603,6 +606,13 @@ void MainWindow::performOperation(Operation operation)
             {
                 m_model->dropMimeData(mimeData, m_dropAction, -1, -1, insertIndex);
             }
+            break;
+        }
+
+        case Operation::SearchText:
+        {
+            SearchDialog searchDialog(m_model, this);
+            searchDialog.exec();
             break;
         }
 

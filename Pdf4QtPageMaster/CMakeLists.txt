@@ -32,11 +32,14 @@ add_executable(Pdf4QtPageMaster
     pageitemdelegate.h
     pageitemmodel.cpp
     pageitemmodel.h
+    searchdialog.cpp
+    searchdialog.h
     selectoutlinetoregroupdialog.cpp
     selectoutlinetoregroupdialog.h
     aboutdialog.ui
     assembleoutputsettingsdialog.ui
     mainwindow.ui
+    searchdialog.ui
     selectoutlinetoregroupdialog.ui
     resources.qrc
     icon.rc
