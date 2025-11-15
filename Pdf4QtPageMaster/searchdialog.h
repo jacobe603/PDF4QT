@@ -23,7 +23,10 @@
 #ifndef PDFPAGEMASTER_SEARCHDIALOG_H
 #define PDFPAGEMASTER_SEARCHDIALOG_H
 
+#include "pageitemmodel.h"
+
 #include <QDialog>
+#include <vector>
 
 namespace Ui
 {
@@ -32,8 +35,6 @@ class SearchDialog;
 
 namespace pdfpagemaster
 {
-
-class PageItemModel;
 
 class SearchDialog : public QDialog
 {
@@ -45,10 +46,13 @@ public:
 
 private slots:
     void onSearchClicked();
+    void onExtractClicked();
+    void onResultSelectionChanged();
 
 private:
     Ui::SearchDialog* ui;
     PageItemModel* m_model;
+    std::vector<PageItemModel::PageRange> m_pageRanges;
 };
 
 }   // namespace pdfpagemaster

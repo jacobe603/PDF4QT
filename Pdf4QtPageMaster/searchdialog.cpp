@@ -25,6 +25,9 @@
 #include "pageitemmodel.h"
 
 #include <QFileInfo>
+#include <QFileDialog>
+#include <QMessageBox>
+#include <QRegularExpression>
 
 namespace pdfpagemaster
 {
@@ -38,6 +41,12 @@ SearchDialog::SearchDialog(PageItemModel* model, QWidget* parent) :
 
     // Connect search button to search slot
     connect(ui->searchButton, &QPushButton::clicked, this, &SearchDialog::onSearchClicked);
+
+    // Connect extract button to extract slot
+    connect(ui->extractButton, &QPushButton::clicked, this, &SearchDialog::onExtractClicked);
+
+    // Connect list widget selection change
+    connect(ui->resultsListWidget, &QListWidget::itemSelectionChanged, this, &SearchDialog::onResultSelectionChanged);
 }
 
 SearchDialog::~SearchDialog()
@@ -65,6 +74,7 @@ void SearchDialog::onSearchClicked()
     // Display results
     if (results.empty())
     {
+        m_pageRanges.clear();
         ui->resultsListWidget->addItem(tr("No results found for: %1").arg(searchText));
     }
     else
@@ -92,6 +102,9 @@ void SearchDialog::onSearchClicked()
                 displayRanges.push_back(range);
             }
         }
+
+        // Store ranges for extraction
+        m_pageRanges = displayRanges;
 
         // Display summary
         ui->resultsListWidget->addItem(tr("Found %1 result(s) in %2 page range(s):")
@@ -151,6 +164,93 @@ void SearchDialog::onSearchClicked()
 
             ui->resultsListWidget->addItem(itemText);
         }
+    }
+}
+
+void SearchDialog::onResultSelectionChanged()
+{
+    // Enable extract button only when a range item is selected
+    QList<QListWidgetItem*> selectedItems = ui->resultsListWidget->selectedItems();
+    bool hasSelection = !selectedItems.isEmpty();
+
+    // Only enable if we have ranges and a selection
+    ui->extractButton->setEnabled(hasSelection && !m_pageRanges.empty());
+}
+
+void SearchDialog::onExtractClicked()
+{
+    // Get the selected item
+    QListWidgetItem* selectedItem = ui->resultsListWidget->currentItem();
+    if (!selectedItem)
+    {
+        return;
+    }
+
+    // Get the text of the selected item to find which range it is
+    QString selectedText = selectedItem->text();
+
+    // Find the range index - looking for "Range X:" pattern
+    int rangeIndex = -1;
+    if (selectedText.contains("Range"))
+    {
+        // Extract range number from text like "  Range 1: Pages 12-25 ..."
+        QRegularExpression rx("Range\\s+(\\d+):");
+        QRegularExpressionMatch match = rx.match(selectedText);
+        if (match.hasMatch())
+        {
+            rangeIndex = match.captured(1).toInt() - 1;  // Convert to 0-based
+        }
+    }
+
+    // Validate range index
+    if (rangeIndex < 0 || rangeIndex >= static_cast<int>(m_pageRanges.size()))
+    {
+        QMessageBox::warning(this, tr("Extract Pages"),
+                           tr("Please select a page range from the results list."));
+        return;
+    }
+
+    const PageItemModel::PageRange& range = m_pageRanges[rangeIndex];
+
+    // Prompt for output filename
+    QString defaultFileName = QString("%1_pages_%2-%3.pdf")
+        .arg(QFileInfo(range.documentName).baseName())
+        .arg(range.firstPage)
+        .arg(range.lastPage);
+
+    QString outputPath = QFileDialog::getSaveFileName(
+        this,
+        tr("Save Extracted Pages"),
+        defaultFileName,
+        tr("PDF Files (*.pdf)"));
+
+    if (outputPath.isEmpty())
+    {
+        return;  // User cancelled
+    }
+
+    // Ensure .pdf extension
+    if (!outputPath.endsWith(".pdf", Qt::CaseInsensitive))
+    {
+        outputPath += ".pdf";
+    }
+
+    // Perform extraction
+    QString errorMessage;
+    bool success = m_model->extractPageRange(range.documentIndex, range.firstPage, range.lastPage, outputPath, errorMessage);
+
+    if (success)
+    {
+        QMessageBox::information(this, tr("Extract Pages"),
+                               tr("Successfully extracted pages %1-%2 to:\n%3")
+                               .arg(range.firstPage)
+                               .arg(range.lastPage)
+                               .arg(outputPath));
+    }
+    else
+    {
+        QMessageBox::critical(this, tr("Extract Pages"),
+                            tr("Failed to extract pages:\n%1").arg(errorMessage));
     }
 }
 

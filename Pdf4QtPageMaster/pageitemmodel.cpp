@@ -1544,4 +1544,80 @@ std::vector<PageItemModel::PageRange> PageItemModel::detectPageRanges(const std:
     return ranges;
 }
 
+bool PageItemModel::extractPageRange(int documentIndex, pdf::PDFInteger firstPage, pdf::PDFInteger lastPage, const QString& outputPath, QString& errorMessage) const
+{
+    // Find the document
+    auto it = m_documents.find(documentIndex);
+    if (it == m_documents.end())
+    {
+        errorMessage = tr("Document not found");
+        return false;
+    }
+
+    const pdf::PDFDocument& document = it->second.document;
+
+    // Validate page range
+    const size_t pageCount = document.getCatalog()->getPageCount();
+    if (firstPage < 1 || lastPage < 1 || firstPage > lastPage || static_cast<size_t>(lastPage) > pageCount)
+    {
+        errorMessage = tr("Invalid page range: %1-%2 (document has %3 pages)")
+            .arg(firstPage)
+            .arg(lastPage)
+            .arg(pageCount);
+        return false;
+    }
+
+    try
+    {
+        // Setup manipulator with the source document
+        pdf::PDFDocumentManipulator manipulator;
+        manipulator.addDocument(documentIndex, &document);
+
+        // Create assembled pages for the range (convert from 1-based to 0-based indexing)
+        std::vector<pdf::PDFDocumentManipulator::AssembledPage> pages;
+        for (pdf::PDFInteger pageNum = firstPage; pageNum <= lastPage; ++pageNum)
+        {
+            pdf::PDFDocumentManipulator::AssembledPage page;
+            page.documentIndex = documentIndex;
+            page.pageIndex = pageNum - 1;  // Convert to 0-based
+            page.pageRotation = pdf::PageRotation::None;
+            pages.push_back(page);
+        }
+
+        // Assemble the new document
+        pdf::PDFOperationResult assembleResult = manipulator.assemble({pages});
+
+        if (!assembleResult)
+        {
+            errorMessage = tr("Failed to assemble pages: %1").arg(assembleResult.getErrorMessage());
+            return false;
+        }
+
+        // Get the assembled document
+        pdf::PDFDocument extractedDoc = manipulator.takeAssembledDocument();
+
+        // Write to file (with safe write enabled)
+        pdf::PDFDocumentWriter writer(nullptr);
+        pdf::PDFOperationResult writeResult = writer.write(outputPath, &extractedDoc, true);
+
+        if (!writeResult)
+        {
+            errorMessage = tr("Failed to write PDF file: %1").arg(writeResult.getErrorMessage());
+            return false;
+        }
+
+        return true;
+    }
+    catch (const pdf::PDFException& e)
+    {
+        errorMessage = tr("PDF error: %1").arg(e.getMessage());
+        return false;
+    }
+    catch (...)
+    {
+        errorMessage = tr("Unknown error occurred during extraction");
+        return false;
+    }
+}
+
 }   // namespace pdfpagemaster

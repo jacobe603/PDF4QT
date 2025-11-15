@@ -26,6 +26,7 @@
 #include "pdfdocument.h"
 #include "pdfutils.h"
 #include "pdfdocumentmanipulator.h"
+#include "pdfdocumentwriter.h"
 #include "pdfdocumenttextflow.h"
 
 #include <QImage>
@@ -204,6 +205,7 @@ public:
 
     std::vector<SearchResult> searchText(const QString& text, bool caseSensitive) const;
     std::vector<PageRange> detectPageRanges(const std::vector<SearchResult>& results) const;
+    bool extractPageRange(int documentIndex, pdf::PDFInteger firstPage, pdf::PDFInteger lastPage, const QString& outputPath, QString& errorMessage) const;
 
     struct SelectionInfo
     {
