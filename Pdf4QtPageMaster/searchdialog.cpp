@@ -24,6 +24,8 @@
 #include "ui_searchdialog.h"
 #include "pageitemmodel.h"
 
+#include <QFileInfo>
+
 namespace pdfpagemaster
 {
 
@@ -57,12 +59,34 @@ void SearchDialog::onSearchClicked()
         return;
     }
 
-    // TODO: Implement actual search functionality in Phase 1, Task 1.4
-    // For now, just add a placeholder message
-    ui->resultsListWidget->addItem(tr("Search functionality will be implemented in Task 1.4"));
-    ui->resultsListWidget->addItem(tr("Searching for: %1 (Case sensitive: %2)")
-                                    .arg(searchText)
-                                    .arg(caseSensitive ? tr("Yes") : tr("No")));
+    // Perform the search
+    std::vector<PageItemModel::SearchResult> results = m_model->searchText(searchText, caseSensitive);
+
+    // Display results
+    if (results.empty())
+    {
+        ui->resultsListWidget->addItem(tr("No results found for: %1").arg(searchText));
+    }
+    else
+    {
+        ui->resultsListWidget->addItem(tr("Found %1 result(s):").arg(results.size()));
+
+        for (const auto& result : results)
+        {
+            // Format: "Document - Page X: matched text (context)"
+            QString itemText = QString("%1 - Page %2: %3")
+                .arg(QFileInfo(result.documentName).fileName())
+                .arg(result.pageNumber)
+                .arg(result.matched);
+
+            if (!result.context.isEmpty())
+            {
+                itemText += QString(" (%1)").arg(result.context);
+            }
+
+            ui->resultsListWidget->addItem(itemText);
+        }
+    }
 }
 
 }   // namespace pdfpagemaster

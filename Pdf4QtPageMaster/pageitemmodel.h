@@ -26,6 +26,7 @@
 #include "pdfdocument.h"
 #include "pdfutils.h"
 #include "pdfdocumentmanipulator.h"
+#include "pdfdocumenttextflow.h"
 
 #include <QImage>
 #include <QItemSelection>
@@ -181,6 +182,17 @@ public:
 
     const std::map<int, DocumentItem>& getDocuments() const { return m_documents; }
     const std::map<int, ImageItem>& getImages() const { return m_images; }
+
+    struct SearchResult
+    {
+        int documentIndex = -1;
+        QString documentName;
+        pdf::PDFInteger pageNumber = 0;  // 1-based page number
+        QString matched;
+        QString context;
+    };
+
+    std::vector<SearchResult> searchText(const QString& text, bool caseSensitive) const;
 
     struct SelectionInfo
     {

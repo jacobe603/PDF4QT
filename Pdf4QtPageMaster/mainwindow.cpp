@@ -242,7 +242,7 @@ QSize MainWindow::getDefaultPageImageSize() const
 
 QSize MainWindow::getMaxPageImageSize() const
 {
-    return pdf::PDFWidgetUtils::scaleDPI(this, QSize(250, 250));
+    return pdf::PDFWidgetUtils::scaleDPI(this, QSize(600, 600));
 }
 
 void MainWindow::resizeEvent(QResizeEvent* resizeEvent)

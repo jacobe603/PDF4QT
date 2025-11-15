@@ -1407,4 +1407,71 @@ PageItemModel::Modifier::~Modifier()
     }
 }
 
+std::vector<PageItemModel::SearchResult> PageItemModel::searchText(const QString& text, bool caseSensitive) const
+{
+    std::vector<SearchResult> results;
+
+    if (text.isEmpty())
+    {
+        return results;
+    }
+
+    Qt::CaseSensitivity sensitivity = caseSensitive ? Qt::CaseSensitive : Qt::CaseInsensitive;
+
+    // Search through all documents
+    for (const auto& [docIndex, docItem] : m_documents)
+    {
+        const pdf::PDFDocument& document = docItem.document;
+        const pdf::PDFCatalog* catalog = document.getCatalog();
+
+        if (!catalog)
+        {
+            continue;
+        }
+
+        // Use PDFDocumentTextFlowFactory to extract text safely
+        pdf::PDFDocumentTextFlowFactory factory;
+        factory.setCalculateBoundingBoxes(true);
+
+        // Create text flow for the entire document using Layout algorithm (reliable, uses docstrum)
+        pdf::PDFDocumentTextFlow textFlow = factory.create(&document, pdf::PDFDocumentTextFlowFactory::Algorithm::Layout);
+
+        // Get all items from the text flow
+        const auto& items = textFlow.getItems();
+
+        // Search through each text item
+        for (const auto& item : items)
+        {
+            if (!item.isText())
+            {
+                continue;  // Skip non-text items
+            }
+
+            // Check if this item's text contains our search term
+            int pos = item.text.indexOf(text, 0, sensitivity);
+            if (pos != -1)
+            {
+                SearchResult searchResult;
+                searchResult.documentIndex = docIndex;
+                searchResult.documentName = docItem.fileName;
+                searchResult.pageNumber = item.pageIndex + 1;  // Convert to 1-based
+                searchResult.matched = item.text.mid(pos, text.length());
+
+                // Create context: some text before and after the match
+                const int contextLength = 40;
+                int contextStart = qMax(0, pos - contextLength);
+                int contextEnd = qMin(item.text.length(), pos + text.length() + contextLength);
+                searchResult.context = item.text.mid(contextStart, contextEnd - contextStart);
+
+                // Clean up context (trim whitespace)
+                searchResult.context = searchResult.context.simplified();
+
+                results.push_back(searchResult);
+            }
+        }
+    }
+
+    return results;
+}
+
 }   // namespace pdfpagemaster
