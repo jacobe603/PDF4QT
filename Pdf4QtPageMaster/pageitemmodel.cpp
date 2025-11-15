@@ -1474,4 +1474,74 @@ std::vector<PageItemModel::SearchResult> PageItemModel::searchText(const QString
     return results;
 }
 
+std::vector<PageItemModel::PageRange> PageItemModel::detectPageRanges(const std::vector<SearchResult>& results) const
+{
+    std::vector<PageRange> ranges;
+
+    if (results.empty())
+    {
+        return ranges;
+    }
+
+    // Group results by document
+    std::map<int, std::vector<pdf::PDFInteger>> documentPages;
+    std::map<int, QString> documentNames;
+
+    for (const auto& result : results)
+    {
+        documentPages[result.documentIndex].push_back(result.pageNumber);
+        documentNames[result.documentIndex] = result.documentName;
+    }
+
+    // For each document, detect consecutive page ranges
+    for (const auto& [docIndex, pages] : documentPages)
+    {
+        if (pages.empty())
+        {
+            continue;
+        }
+
+        // Sort pages and remove duplicates
+        std::vector<pdf::PDFInteger> sortedPages = pages;
+        std::sort(sortedPages.begin(), sortedPages.end());
+        sortedPages.erase(std::unique(sortedPages.begin(), sortedPages.end()), sortedPages.end());
+
+        // Detect consecutive ranges
+        pdf::PDFInteger rangeStart = sortedPages[0];
+        pdf::PDFInteger rangeEnd = sortedPages[0];
+
+        for (size_t i = 1; i < sortedPages.size(); ++i)
+        {
+            if (sortedPages[i] == rangeEnd + 1)
+            {
+                // Extend current range
+                rangeEnd = sortedPages[i];
+            }
+            else
+            {
+                // Save current range and start new one
+                PageRange range;
+                range.documentIndex = docIndex;
+                range.documentName = documentNames[docIndex];
+                range.firstPage = rangeStart;
+                range.lastPage = rangeEnd;
+                ranges.push_back(range);
+
+                rangeStart = sortedPages[i];
+                rangeEnd = sortedPages[i];
+            }
+        }
+
+        // Don't forget the last range
+        PageRange range;
+        range.documentIndex = docIndex;
+        range.documentName = documentNames[docIndex];
+        range.firstPage = rangeStart;
+        range.lastPage = rangeEnd;
+        ranges.push_back(range);
+    }
+
+    return ranges;
+}
+
 }   // namespace pdfpagemaster

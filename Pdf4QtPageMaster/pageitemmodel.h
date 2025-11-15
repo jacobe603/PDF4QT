@@ -192,7 +192,18 @@ public:
         QString context;
     };
 
+    struct PageRange
+    {
+        int documentIndex = -1;
+        QString documentName;
+        pdf::PDFInteger firstPage = 0;  // 1-based page number
+        pdf::PDFInteger lastPage = 0;   // 1-based page number
+
+        int pageCount() const { return static_cast<int>(lastPage - firstPage + 1); }
+    };
+
     std::vector<SearchResult> searchText(const QString& text, bool caseSensitive) const;
+    std::vector<PageRange> detectPageRanges(const std::vector<SearchResult>& results) const;
 
     struct SelectionInfo
     {

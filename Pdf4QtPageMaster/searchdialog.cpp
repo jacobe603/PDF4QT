@@ -69,12 +69,77 @@ void SearchDialog::onSearchClicked()
     }
     else
     {
-        ui->resultsListWidget->addItem(tr("Found %1 result(s):").arg(results.size()));
+        // Detect page ranges from search results
+        std::vector<PageItemModel::PageRange> ranges = m_model->detectPageRanges(results);
+
+        // Check if there are any multi-page ranges
+        bool hasMultiPageRanges = false;
+        for (const auto& range : ranges)
+        {
+            if (range.pageCount() > 1)
+            {
+                hasMultiPageRanges = true;
+                break;
+            }
+        }
+
+        // Filter ranges: if multi-page ranges exist, only show those
+        std::vector<PageItemModel::PageRange> displayRanges;
+        for (const auto& range : ranges)
+        {
+            if (!hasMultiPageRanges || range.pageCount() > 1)
+            {
+                displayRanges.push_back(range);
+            }
+        }
+
+        // Display summary
+        ui->resultsListWidget->addItem(tr("Found %1 result(s) in %2 page range(s):")
+            .arg(results.size())
+            .arg(displayRanges.size()));
+
+        // Display detected page ranges
+        if (!displayRanges.empty())
+        {
+            ui->resultsListWidget->addItem("");  // Blank line
+            ui->resultsListWidget->addItem(tr("📄 Page Ranges:"));
+
+            for (size_t i = 0; i < displayRanges.size(); ++i)
+            {
+                const auto& range = displayRanges[i];
+                QString rangeText;
+
+                if (range.firstPage == range.lastPage)
+                {
+                    // Single page
+                    rangeText = tr("  Range %1: Page %2 (%3) - 1 page")
+                        .arg(i + 1)
+                        .arg(range.firstPage)
+                        .arg(QFileInfo(range.documentName).fileName());
+                }
+                else
+                {
+                    // Multiple consecutive pages
+                    rangeText = tr("  Range %1: Pages %2-%3 (%4) - %5 pages")
+                        .arg(i + 1)
+                        .arg(range.firstPage)
+                        .arg(range.lastPage)
+                        .arg(QFileInfo(range.documentName).fileName())
+                        .arg(range.pageCount());
+                }
+
+                ui->resultsListWidget->addItem(rangeText);
+            }
+        }
+
+        // Display individual search results
+        ui->resultsListWidget->addItem("");  // Blank line
+        ui->resultsListWidget->addItem(tr("🔍 Individual Results:"));
 
         for (const auto& result : results)
         {
             // Format: "Document - Page X: matched text (context)"
-            QString itemText = QString("%1 - Page %2: %3")
+            QString itemText = QString("  %1 - Page %2: %3")
                 .arg(QFileInfo(result.documentName).fileName())
                 .arg(result.pageNumber)
                 .arg(result.matched);
