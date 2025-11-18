@@ -68,8 +68,53 @@ void SearchDialog::onSearchClicked()
         return;
     }
 
-    // Perform the search
-    std::vector<PageItemModel::SearchResult> results = m_model->searchText(searchText, caseSensitive);
+    // Check if this looks like a spec section and search for all format variants
+    std::vector<PageItemModel::SearchResult> results;
+
+    if (PageItemModel::isSpecSection(searchText))
+    {
+        // Generate all format variants (233600, 23 3600, 23-3600, etc.)
+        QStringList variants = PageItemModel::generateSearchVariants(searchText);
+
+        // Debug: Show which variants we're searching for
+        ui->resultsListWidget->addItem(QString("Detected spec section. Searching for %1 variants:").arg(variants.size()));
+        for (const QString& variant : variants)
+        {
+            ui->resultsListWidget->addItem(QString("  - \"%1\"").arg(variant));
+        }
+
+        // Search for each variant and combine results
+        std::set<QString> seenKeys;  // To deduplicate results
+
+        for (const QString& variant : variants)
+        {
+            std::vector<PageItemModel::SearchResult> variantResults = m_model->searchText(variant, caseSensitive);
+
+            for (const auto& result : variantResults)
+            {
+                // Create unique key: documentIndex + pageNumber
+                QString key = QString("%1_%2").arg(result.documentIndex).arg(result.pageNumber);
+
+                if (seenKeys.find(key) == seenKeys.end())
+                {
+                    seenKeys.insert(key);
+                    results.push_back(result);
+                }
+            }
+        }
+
+        // Sort results by document index and page number
+        std::sort(results.begin(), results.end(), [](const PageItemModel::SearchResult& a, const PageItemModel::SearchResult& b) {
+            if (a.documentIndex != b.documentIndex)
+                return a.documentIndex < b.documentIndex;
+            return a.pageNumber < b.pageNumber;
+        });
+    }
+    else
+    {
+        // Regular search for non-spec-section text
+        results = m_model->searchText(searchText, caseSensitive);
+    }
 
     // Display results
     if (results.empty())

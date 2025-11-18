@@ -1620,4 +1620,102 @@ bool PageItemModel::extractPageRange(int documentIndex, pdf::PDFInteger firstPag
     }
 }
 
+bool PageItemModel::isSpecSection(const QString& text)
+{
+    // Check if text matches spec section pattern
+    // Formats: 233600, 23 3600, 23-3600, 23_3600, 23 36 00
+    // Pattern 1: 2-3 digits, optional separator, 4-5 digits
+    // Pattern 2: 2-3 digits, space, 2 digits, space, 2 digits
+
+    QString trimmed = text.trimmed();
+
+    // Pattern 1: 2-3 digits + optional separator + 4-5 digits
+    QRegularExpression rx1("^(\\d{2,3})\\s*[-_\\s]?\\s*(\\d{4,5})$");
+    if (rx1.match(trimmed).hasMatch())
+        return true;
+
+    // Pattern 2: 2-3 digits + space + 2 digits + space + 2 digits (e.g., "23 36 00")
+    QRegularExpression rx2("^(\\d{2,3})\\s+(\\d{2})\\s+(\\d{2})$");
+    return rx2.match(trimmed).hasMatch();
+}
+
+QString PageItemModel::normalizeSpecSection(const QString& text)
+{
+    QString trimmed = text.trimmed();
+
+    // Try Pattern 1: Extract division and section numbers
+    QRegularExpression rx1("^(\\d{2,3})\\s*[-_\\s]?\\s*(\\d{4,5})$");
+    QRegularExpressionMatch match1 = rx1.match(trimmed);
+
+    if (match1.hasMatch())
+    {
+        QString division = match1.captured(1);
+        QString section = match1.captured(2);
+
+        // Normalize to "XX XXXX" format with space
+        return QString("%1 %2").arg(division).arg(section);
+    }
+
+    // Try Pattern 2: division + space + 2 digits + space + 2 digits (e.g., "23 36 00")
+    QRegularExpression rx2("^(\\d{2,3})\\s+(\\d{2})\\s+(\\d{2})$");
+    QRegularExpressionMatch match2 = rx2.match(trimmed);
+
+    if (match2.hasMatch())
+    {
+        QString division = match2.captured(1);
+        QString firstPair = match2.captured(2);
+        QString secondPair = match2.captured(3);
+
+        // Combine the pairs into a 4-digit section number
+        QString section = firstPair + secondPair;
+
+        // Normalize to "XX XXXX" format with space
+        return QString("%1 %2").arg(division).arg(section);
+    }
+
+    // If no match, return original
+    return trimmed;
+}
+
+QStringList PageItemModel::generateSearchVariants(const QString& text)
+{
+    QStringList variants;
+
+    QString normalized = normalizeSpecSection(text);
+
+    // Extract division and section from normalized format
+    QRegularExpression rx("^(\\d{2,3})\\s+(\\d{4,5})$");
+    QRegularExpressionMatch match = rx.match(normalized);
+
+    if (match.hasMatch())
+    {
+        QString division = match.captured(1);
+        QString section = match.captured(2);
+
+        // Generate all common variants
+        variants << QString("%1%2").arg(division).arg(section);      // 233600
+        variants << QString("%1 %2").arg(division).arg(section);     // 23 3600
+        variants << QString("%1-%2").arg(division).arg(section);     // 23-3600
+        variants << QString("%1_%2").arg(division).arg(section);     // 23_3600
+
+        // Add variant with spaces between digit pairs (e.g., "23 36 00")
+        if (section.length() == 4)
+        {
+            QString firstPair = section.mid(0, 2);
+            QString secondPair = section.mid(2, 2);
+            variants << QString("%1 %2 %3").arg(division).arg(firstPair).arg(secondPair);  // 23 36 00
+        }
+
+        // Remove duplicates
+        variants.removeDuplicates();
+    }
+    else
+    {
+        // If not a recognized pattern, just use the original text
+        variants << text;
+    }
+
+    return variants;
+}
+
 }   // namespace pdfpagemaster

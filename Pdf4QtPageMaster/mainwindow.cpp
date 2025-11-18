@@ -26,7 +26,10 @@
 #include "aboutdialog.h"
 #include "assembleoutputsettingsdialog.h"
 #include "searchdialog.h"
+#include "batchsearchdialog.h"
+#include "discoversectionsdialog.h"
 #include "selectoutlinetoregroupdialog.h"
+#include "specsectiondatabase.h"
 
 #include "pdfaction.h"
 #include "pdfwidgetutils.h"
@@ -79,6 +82,8 @@ MainWindow::MainWindow(QWidget* parent) :
     ui->actionCopy->setData(int(Operation::Copy));
     ui->actionPaste->setData(int(Operation::Paste));
     ui->actionSearchText->setData(int(Operation::SearchText));
+    ui->actionBatchSearchText->setData(int(Operation::BatchSearchText));
+    ui->actionDiscoverSections->setData(int(Operation::DiscoverSections));
     ui->actionRotate_Left->setData(int(Operation::RotateLeft));
     ui->actionRotate_Right->setData(int(Operation::RotateRight));
     ui->actionGroup->setData(int(Operation::Group));
@@ -215,6 +220,9 @@ MainWindow::MainWindow(QWidget* parent) :
     int bytes = size.width() * size.height() * depth * reserveSize;
     int kBytes = bytes / 1024;
     QPixmapCache::setCacheLimit(kBytes);
+
+    // Initialize spec section database
+    SpecSectionDatabase::instance().loadFromResource();
 
     loadSettings();
     updateActions();
@@ -481,6 +489,8 @@ bool MainWindow::canPerformOperation(Operation operation) const
         case Operation::InsertEmptyPage:
         case Operation::InsertPDF:
         case Operation::SearchText:
+        case Operation::BatchSearchText:
+        case Operation::DiscoverSections:
         case Operation::GetSource:
         case Operation::BecomeSponsor:
         case Operation::About:
@@ -613,6 +623,20 @@ void MainWindow::performOperation(Operation operation)
         {
             SearchDialog searchDialog(m_model, this);
             searchDialog.exec();
+            break;
+        }
+
+        case Operation::BatchSearchText:
+        {
+            BatchSearchDialog batchSearchDialog(m_model, this);
+            batchSearchDialog.exec();
+            break;
+        }
+
+        case Operation::DiscoverSections:
+        {
+            DiscoverSectionsDialog discoverDialog(m_model, this);
+            discoverDialog.exec();
             break;
         }
 

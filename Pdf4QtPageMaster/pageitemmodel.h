@@ -207,6 +207,11 @@ public:
     std::vector<PageRange> detectPageRanges(const std::vector<SearchResult>& results) const;
     bool extractPageRange(int documentIndex, pdf::PDFInteger firstPage, pdf::PDFInteger lastPage, const QString& outputPath, QString& errorMessage) const;
 
+    // Spec section pattern matching utilities
+    static bool isSpecSection(const QString& text);
+    static QString normalizeSpecSection(const QString& text);
+    static QStringList generateSearchVariants(const QString& text);
+
     struct SelectionInfo
     {
         int documentCount = 0;

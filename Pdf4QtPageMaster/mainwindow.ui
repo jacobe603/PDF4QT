@@ -82,6 +82,8 @@
     <addaction name="actionPaste"/>
     <addaction name="separator"/>
     <addaction name="actionSearchText"/>
+    <addaction name="actionBatchSearchText"/>
+    <addaction name="actionDiscoverSections"/>
     <addaction name="separator"/>
     <addaction name="actionRotate_Left"/>
     <addaction name="actionRotate_Right"/>
@@ -301,6 +303,22 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+F</string>
+   </property>
+  </action>
+  <action name="actionBatchSearchText">
+   <property name="text">
+    <string>&amp;Batch Search Spec Sections...</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+F</string>
+   </property>
+  </action>
+  <action name="actionDiscoverSections">
+   <property name="text">
+    <string>&amp;Discover Division 23 Sections...</string>
+   </property>
+   <property name="toolTip">
+    <string>Scan loaded PDFs for Division 23 (HVAC) spec sections</string>
    </property>
   </action>
   <action name="actionReplaceSelection">

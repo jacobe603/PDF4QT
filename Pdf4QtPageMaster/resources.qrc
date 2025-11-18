@@ -41,5 +41,6 @@
         <file>resources/wallet.svg</file>
         <file>resources/regroup-outline.svg</file>
         <file>resources/regroup-reverse.svg</file>
+        <file>resources/masterformat_div23.csv</file>
     </qresource>
 </RCC>

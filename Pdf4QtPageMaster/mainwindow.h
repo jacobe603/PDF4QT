@@ -70,6 +70,8 @@ public:
         Paste,
 
         SearchText,
+        BatchSearchText,
+        DiscoverSections,
 
         RotateLeft,
         RotateRight,
