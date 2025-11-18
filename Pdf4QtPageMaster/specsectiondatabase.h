@@ -31,6 +31,7 @@ namespace pdfpagemaster
 
 /// Database of MasterFormat Division 23 (HVAC) spec sections
 /// Provides spec section number to title lookup
+/// Supports custom user-defined titles via QSettings
 class SpecSectionDatabase
 {
 public:
@@ -42,11 +43,12 @@ public:
     bool loadFromResource();
 
     /// Get title for a spec section
+    /// Checks custom titles first, then CSV database
     /// @param section Spec section number (e.g., "23 36 00", "233600", "23-36-00")
     /// @return Title if found, empty string otherwise
     QString getTitle(const QString& section) const;
 
-    /// Check if spec section exists in database
+    /// Check if spec section exists in database (CSV or custom)
     /// @param section Spec section number (any format)
     /// @return true if section exists
     bool exists(const QString& section) const;
@@ -55,13 +57,35 @@ public:
     /// @return List of all section numbers
     QStringList getAllSections() const;
 
-    /// Get count of loaded spec sections
+    /// Get count of loaded spec sections (CSV database only)
     /// @return Number of sections in database
     int count() const { return m_sections.size(); }
 
     /// Check if database is loaded
     /// @return true if database has been loaded
     bool isLoaded() const { return !m_sections.isEmpty(); }
+
+    // Custom title management
+
+    /// Set custom title for a spec section
+    /// Saves to QSettings for persistence
+    /// @param section Spec section number (any format)
+    /// @param title Custom title to set
+    void setCustomTitle(const QString& section, const QString& title);
+
+    /// Check if section has a custom title
+    /// @param section Spec section number (any format)
+    /// @return true if custom title exists
+    bool hasCustomTitle(const QString& section) const;
+
+    /// Get custom title for a spec section
+    /// @param section Spec section number (any format)
+    /// @return Custom title if exists, empty string otherwise
+    QString getCustomTitle(const QString& section) const;
+
+    /// Remove custom title for a spec section
+    /// @param section Spec section number (any format)
+    void removeCustomTitle(const QString& section);
 
 private:
     SpecSectionDatabase() = default;
@@ -75,7 +99,19 @@ private:
     /// Removes spaces, dashes, underscores: "23 36 00" -> "233600"
     static QString normalize(const QString& section);
 
-    QMap<QString, QString> m_sections;  // normalized section -> title
+    /// Load custom titles from QSettings
+    void loadCustomTitles() const;
+
+    /// Save all custom titles to QSettings
+    void saveCustomTitles() const;
+
+    // QSettings keys
+    static const QString SETTINGS_GROUP;
+    static const QString CUSTOM_TITLES_KEY;
+
+    QMap<QString, QString> m_sections;  // normalized section -> title (CSV database)
+    mutable QMap<QString, QString> m_customTitles;  // normalized section -> custom title
+    mutable bool m_customTitlesLoaded = false;  // lazy loading flag
 };
 
 }   // namespace pdfpagemaster

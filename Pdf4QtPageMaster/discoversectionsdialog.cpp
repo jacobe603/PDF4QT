@@ -23,11 +23,13 @@
 #include "discoversectionsdialog.h"
 #include "ui_discoversectionsdialog.h"
 #include "specsectiondatabase.h"
+#include "detectsectiontitledialog.h"
 
 #include <QMessageBox>
 #include <QProgressDialog>
 #include <QRegularExpression>
 #include <QSet>
+#include <QMenu>
 
 namespace pdfpagemaster
 {
@@ -43,6 +45,13 @@ DiscoverSectionsDialog::DiscoverSectionsDialog(PageItemModel* model, QWidget* pa
     connect(ui->scanButton, &QPushButton::clicked, this, &DiscoverSectionsDialog::onScanClicked);
     connect(ui->addSelectedButton, &QPushButton::clicked, this, &DiscoverSectionsDialog::onAddSelectedClicked);
     connect(ui->resultsListWidget, &QListWidget::itemSelectionChanged, this, &DiscoverSectionsDialog::onResultsSelectionChanged);
+    connect(ui->selectAllButton, &QPushButton::clicked, this, &DiscoverSectionsDialog::onSelectAllClicked);
+    connect(ui->selectNoneButton, &QPushButton::clicked, this, &DiscoverSectionsDialog::onSelectNoneClicked);
+
+    // Setup context menu for results list
+    ui->resultsListWidget->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(ui->resultsListWidget, &QWidget::customContextMenuRequested,
+            this, &DiscoverSectionsDialog::onResultsContextMenu);
 
     updateButtons();
 }
@@ -241,10 +250,139 @@ void DiscoverSectionsDialog::displayResults()
     updateButtons();
 }
 
+void DiscoverSectionsDialog::onSelectAllClicked()
+{
+    for (int i = 0; i < ui->resultsListWidget->count(); ++i)
+    {
+        QListWidgetItem* item = ui->resultsListWidget->item(i);
+        item->setCheckState(Qt::Checked);
+    }
+}
+
+void DiscoverSectionsDialog::onSelectNoneClicked()
+{
+    for (int i = 0; i < ui->resultsListWidget->count(); ++i)
+    {
+        QListWidgetItem* item = ui->resultsListWidget->item(i);
+        item->setCheckState(Qt::Unchecked);
+    }
+}
+
 void DiscoverSectionsDialog::updateButtons()
 {
     bool hasResults = ui->resultsListWidget->count() > 0;
     ui->addSelectedButton->setEnabled(hasResults);
+    ui->selectAllButton->setEnabled(hasResults);
+    ui->selectNoneButton->setEnabled(hasResults);
+}
+
+void DiscoverSectionsDialog::onResultsContextMenu(const QPoint& pos)
+{
+    QListWidgetItem* item = ui->resultsListWidget->itemAt(pos);
+    if (!item)
+    {
+        return;
+    }
+
+    QMenu menu(this);
+    QAction* detectAction = menu.addAction(tr("Detect Title from PDF..."));
+
+    QAction* selected = menu.exec(ui->resultsListWidget->mapToGlobal(pos));
+    if (selected == detectAction)
+    {
+        onDetectTitleRequested();
+    }
+}
+
+void DiscoverSectionsDialog::onDetectTitleRequested()
+{
+    // Get selected item
+    QListWidgetItem* item = ui->resultsListWidget->currentItem();
+    if (!item)
+    {
+        return;
+    }
+
+    // Get section number from UserRole
+    QString section = item->data(Qt::UserRole).toString();
+    if (section.isEmpty())
+    {
+        return;
+    }
+
+    // Check if title already exists in database
+    if (SpecSectionDatabase::instance().exists(section) &&
+        !SpecSectionDatabase::instance().hasCustomTitle(section))
+    {
+        QMessageBox::information(this, tr("Title Exists"),
+            tr("This section already has a title in the Division 23 database:\n\n%1")
+            .arg(SpecSectionDatabase::instance().getTitle(section)));
+        return;
+    }
+
+    // Determine which document to search
+    // For discovery dialog, we need to pick the first document that contains this section
+    int documentIndex = -1;
+    const auto& documents = m_model->getDocuments();
+    for (const auto& [docIdx, docItem] : documents)
+    {
+        // Search this document for the section
+        QStringList variants = PageItemModel::generateSearchVariants(section);
+        for (const QString& variant : variants)
+        {
+            auto results = m_model->searchText(variant, false);
+            if (!results.empty())
+            {
+                documentIndex = docIdx;
+                break;
+            }
+        }
+        if (documentIndex != -1)
+        {
+            break;
+        }
+    }
+
+    if (documentIndex == -1)
+    {
+        QMessageBox::warning(this, tr("Section Not Found"),
+            tr("Could not find this section in any loaded documents."));
+        return;
+    }
+
+    // Detect title
+    QPair<bool, QString> result = m_model->detectSpecSectionTitle(section, documentIndex);
+
+    if (!result.first || result.second.isEmpty())
+    {
+        QMessageBox::warning(this, tr("Detection Failed"),
+            tr("Could not automatically detect a title for this section.\n\n"
+               "You can manually enter a title by opening the Batch Search dialog "
+               "and editing the section entry."));
+        return;
+    }
+
+    // Show confirmation dialog
+    DetectSectionTitleDialog dialog(this);
+    dialog.setSection(section);
+    dialog.setDetectedTitle(result.second);
+
+    if (dialog.exec() == QDialog::Accepted)
+    {
+        QString title = dialog.getTitle();
+        if (!title.isEmpty())
+        {
+            // Save to custom titles
+            SpecSectionDatabase::instance().setCustomTitle(section, title);
+
+            // Update display text
+            QString displayText = section + " - " + title;
+            item->setText(displayText);
+
+            QMessageBox::information(this, tr("Title Saved"),
+                tr("The custom title has been saved for this section."));
+        }
+    }
 }
 
 }   // namespace pdfpagemaster

@@ -54,6 +54,10 @@ private slots:
     void onScanClicked();
     void onAddSelectedClicked();
     void onResultsSelectionChanged();
+    void onSelectAllClicked();
+    void onSelectNoneClicked();
+    void onResultsContextMenu(const QPoint& pos);
+    void onDetectTitleRequested();
 
 private:
     struct DiscoveredSection

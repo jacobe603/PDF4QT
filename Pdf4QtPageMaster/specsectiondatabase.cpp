@@ -25,9 +25,14 @@
 #include <QFile>
 #include <QTextStream>
 #include <QRegularExpression>
+#include <QSettings>
 
 namespace pdfpagemaster
 {
+
+// QSettings keys for custom titles
+const QString SpecSectionDatabase::SETTINGS_GROUP = "PageMaster";
+const QString SpecSectionDatabase::CUSTOM_TITLES_KEY = "CustomSpecTitles";
 
 SpecSectionDatabase& SpecSectionDatabase::instance()
 {
@@ -112,14 +117,28 @@ bool SpecSectionDatabase::loadFromResource()
 
 QString SpecSectionDatabase::getTitle(const QString& section) const
 {
+    loadCustomTitles();
+
     QString normalizedSection = normalize(section);
+
+    // Check custom titles first (higher priority)
+    if (m_customTitles.contains(normalizedSection))
+    {
+        return m_customTitles.value(normalizedSection);
+    }
+
+    // Fallback to CSV database
     return m_sections.value(normalizedSection, QString());
 }
 
 bool SpecSectionDatabase::exists(const QString& section) const
 {
+    loadCustomTitles();
+
     QString normalizedSection = normalize(section);
-    return m_sections.contains(normalizedSection);
+
+    // Check both custom titles and CSV database
+    return m_customTitles.contains(normalizedSection) || m_sections.contains(normalizedSection);
 }
 
 QStringList SpecSectionDatabase::getAllSections() const
@@ -138,6 +157,98 @@ QString SpecSectionDatabase::normalize(const QString& section)
     normalized.remove('-');
     normalized.remove('_');
     return normalized.trimmed();
+}
+
+void SpecSectionDatabase::loadCustomTitles() const
+{
+    if (m_customTitlesLoaded)
+    {
+        return;
+    }
+
+    QSettings settings;
+    settings.beginGroup(SETTINGS_GROUP);
+    int size = settings.beginReadArray(CUSTOM_TITLES_KEY);
+
+    for (int i = 0; i < size; ++i)
+    {
+        settings.setArrayIndex(i);
+        QString section = settings.value("section").toString();
+        QString title = settings.value("title").toString();
+
+        if (!section.isEmpty() && !title.isEmpty())
+        {
+            m_customTitles[normalize(section)] = title;
+        }
+    }
+
+    settings.endArray();
+    settings.endGroup();
+    m_customTitlesLoaded = true;
+}
+
+void SpecSectionDatabase::saveCustomTitles() const
+{
+    QSettings settings;
+    settings.beginGroup(SETTINGS_GROUP);
+    settings.beginWriteArray(CUSTOM_TITLES_KEY);
+
+    int index = 0;
+    for (auto it = m_customTitles.begin(); it != m_customTitles.end(); ++it, ++index)
+    {
+        settings.setArrayIndex(index);
+        settings.setValue("section", it.key());
+        settings.setValue("title", it.value());
+    }
+
+    settings.endArray();
+    settings.endGroup();
+}
+
+void SpecSectionDatabase::setCustomTitle(const QString& section, const QString& title)
+{
+    loadCustomTitles();
+
+    QString normalized = normalize(section);
+
+    if (title.isEmpty())
+    {
+        // Remove custom title if empty
+        m_customTitles.remove(normalized);
+    }
+    else
+    {
+        // Set or update custom title
+        m_customTitles[normalized] = title;
+    }
+
+    saveCustomTitles();
+}
+
+bool SpecSectionDatabase::hasCustomTitle(const QString& section) const
+{
+    loadCustomTitles();
+
+    QString normalized = normalize(section);
+    return m_customTitles.contains(normalized);
+}
+
+QString SpecSectionDatabase::getCustomTitle(const QString& section) const
+{
+    loadCustomTitles();
+
+    QString normalized = normalize(section);
+    return m_customTitles.value(normalized, QString());
+}
+
+void SpecSectionDatabase::removeCustomTitle(const QString& section)
+{
+    loadCustomTitles();
+
+    QString normalized = normalize(section);
+    m_customTitles.remove(normalized);
+
+    saveCustomTitles();
 }
 
 }   // namespace pdfpagemaster

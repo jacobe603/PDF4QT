@@ -204,13 +204,22 @@ public:
     };
 
     std::vector<SearchResult> searchText(const QString& text, bool caseSensitive) const;
+    std::vector<SearchResult> searchTextRegex(const QRegularExpression& regex) const;
     std::vector<PageRange> detectPageRanges(const std::vector<SearchResult>& results) const;
     bool extractPageRange(int documentIndex, pdf::PDFInteger firstPage, pdf::PDFInteger lastPage, const QString& outputPath, QString& errorMessage) const;
+
+    /// Detect spec section title from PDF content
+    /// Searches for section number in document and analyzes surrounding text to extract title
+    /// @param section Spec section number (any format)
+    /// @param documentIndex Index of document to search
+    /// @return Pair of (success, detected title). Success is false if detection failed.
+    QPair<bool, QString> detectSpecSectionTitle(const QString& section, int documentIndex) const;
 
     // Spec section pattern matching utilities
     static bool isSpecSection(const QString& text);
     static QString normalizeSpecSection(const QString& text);
     static QStringList generateSearchVariants(const QString& text);
+    static QString generateRegexPattern(const QString& text);
 
     struct SelectionInfo
     {

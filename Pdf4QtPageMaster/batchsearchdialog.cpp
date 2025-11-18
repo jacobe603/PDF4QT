@@ -24,6 +24,7 @@
 #include "ui_batchsearchdialog.h"
 #include "pageitemmodel.h"
 #include "specsectiondatabase.h"
+#include "detectsectiontitledialog.h"
 
 #include <QFileInfo>
 #include <QFileDialog>
@@ -31,6 +32,7 @@
 #include <QProgressDialog>
 #include <QInputDialog>
 #include <QDir>
+#include <QMenu>
 
 namespace pdfpagemaster
 {
@@ -59,12 +61,73 @@ BatchSearchDialog::BatchSearchDialog(PageItemModel* model, QWidget* parent) :
     // Enable Return key in line edit to add section
     connect(ui->sectionInputLineEdit, &QLineEdit::returnPressed, this, &BatchSearchDialog::onAddSectionClicked);
 
+    // Setup context menu for sections list
+    ui->sectionsListWidget->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(ui->sectionsListWidget, &QWidget::customContextMenuRequested,
+            this, &BatchSearchDialog::onSectionsContextMenu);
+
     updateButtons();
 }
 
 BatchSearchDialog::~BatchSearchDialog()
 {
     delete ui;
+}
+
+void BatchSearchDialog::addSections(const QStringList& sections)
+{
+    for (const QString& section : sections)
+    {
+        QString trimmedSection = section.trimmed();
+
+        if (trimmedSection.isEmpty())
+        {
+            continue;  // Skip empty sections
+        }
+
+        // Validate it's a spec section pattern
+        if (!PageItemModel::isSpecSection(trimmedSection))
+        {
+            continue;  // Skip invalid sections silently
+        }
+
+        // Check for duplicates (normalize first to catch different formats of same section)
+        QString normalized = PageItemModel::normalizeSpecSection(trimmedSection);
+
+        bool isDuplicate = false;
+        for (int i = 0; i < ui->sectionsListWidget->count(); ++i)
+        {
+            QListWidgetItem* existingItem = ui->sectionsListWidget->item(i);
+            QString existingSection = existingItem->data(Qt::UserRole).toString();
+            if (PageItemModel::normalizeSpecSection(existingSection) == normalized)
+            {
+                isDuplicate = true;
+                break;
+            }
+        }
+
+        if (isDuplicate)
+        {
+            continue;  // Skip duplicates silently
+        }
+
+        // Lookup title from database
+        QString title = SpecSectionDatabase::instance().getTitle(normalized);
+
+        // Format display text: "23 36 00 - Air Terminal Units" or just "23 36 00" if no title
+        QString displayText = trimmedSection;
+        if (!title.isEmpty())
+        {
+            displayText = trimmedSection + " - " + title;
+        }
+
+        // Add to list with section stored in UserRole for later retrieval
+        QListWidgetItem* item = new QListWidgetItem(displayText);
+        item->setData(Qt::UserRole, trimmedSection);  // Store original section number
+        ui->sectionsListWidget->addItem(item);
+    }
+
+    updateButtons();
 }
 
 void BatchSearchDialog::onAddSectionClicked()
@@ -277,7 +340,15 @@ void BatchSearchDialog::onSearchAllClicked()
 
         std::vector<PageItemModel::SearchResult> searchResults;
 
-        if (exactMatch)
+        // Check search mode
+        if (ui->regexSearchRadioButton->isChecked())
+        {
+            // Regex search mode: generate regex pattern and search once
+            QString pattern = PageItemModel::generateRegexPattern(section);
+            QRegularExpression regex(pattern);
+            searchResults = m_model->searchTextRegex(regex);
+        }
+        else if (exactMatch)
         {
             // Exact match: search only the entered text
             searchResults = m_model->searchText(section, false);
@@ -630,6 +701,117 @@ void BatchSearchDialog::updateButtons()
         }
     }
     ui->extractButton->setEnabled(hasCheckedResults);
+}
+
+void BatchSearchDialog::onSectionsContextMenu(const QPoint& pos)
+{
+    QListWidgetItem* item = ui->sectionsListWidget->itemAt(pos);
+    if (!item)
+    {
+        return;
+    }
+
+    QMenu menu(this);
+    QAction* detectAction = menu.addAction(tr("Detect Title from PDF..."));
+
+    QAction* selected = menu.exec(ui->sectionsListWidget->mapToGlobal(pos));
+    if (selected == detectAction)
+    {
+        onDetectTitleRequested();
+    }
+}
+
+void BatchSearchDialog::onDetectTitleRequested()
+{
+    // Get selected item
+    QListWidgetItem* item = ui->sectionsListWidget->currentItem();
+    if (!item)
+    {
+        return;
+    }
+
+    // Get section number from UserRole
+    QString section = item->data(Qt::UserRole).toString();
+    if (section.isEmpty())
+    {
+        return;
+    }
+
+    // Normalize section for database lookup
+    QString normalized = PageItemModel::normalizeSpecSection(section);
+
+    // Check if title already exists in CSV database (not custom)
+    if (SpecSectionDatabase::instance().exists(normalized) &&
+        !SpecSectionDatabase::instance().hasCustomTitle(normalized))
+    {
+        QMessageBox::information(this, tr("Title Exists"),
+            tr("This section already has a title in the Division 23 database:\n\n%1")
+            .arg(SpecSectionDatabase::instance().getTitle(normalized)));
+        return;
+    }
+
+    // Determine which document to search
+    // For batch search dialog, we need to search all loaded documents
+    int documentIndex = -1;
+    const auto& documents = m_model->getDocuments();
+    for (const auto& [docIdx, docItem] : documents)
+    {
+        // Search this document for the section
+        QStringList variants = PageItemModel::generateSearchVariants(section);
+        for (const QString& variant : variants)
+        {
+            auto results = m_model->searchText(variant, false);
+            if (!results.empty())
+            {
+                documentIndex = docIdx;
+                break;
+            }
+        }
+        if (documentIndex != -1)
+        {
+            break;
+        }
+    }
+
+    if (documentIndex == -1)
+    {
+        QMessageBox::warning(this, tr("Section Not Found"),
+            tr("Could not find this section in any loaded documents."));
+        return;
+    }
+
+    // Detect title
+    QPair<bool, QString> result = m_model->detectSpecSectionTitle(section, documentIndex);
+
+    if (!result.first || result.second.isEmpty())
+    {
+        QMessageBox::warning(this, tr("Detection Failed"),
+            tr("Could not automatically detect a title for this section.\n\n"
+               "You can manually enter a title by editing the section entry."));
+        return;
+    }
+
+    // Show confirmation dialog
+    DetectSectionTitleDialog dialog(this);
+    dialog.setSection(section);
+    dialog.setDetectedTitle(result.second);
+
+    if (dialog.exec() == QDialog::Accepted)
+    {
+        QString title = dialog.getTitle();
+        if (!title.isEmpty())
+        {
+            // Save to custom titles
+            SpecSectionDatabase::instance().setCustomTitle(normalized, title);
+
+            // Update display text
+            QString displayText = section + " - " + title;
+            item->setText(displayText);
+
+            QMessageBox::information(this, tr("Title Saved"),
+                tr("The custom title has been saved for this section."));
+        }
+    }
 }
 
 }   // namespace pdfpagemaster

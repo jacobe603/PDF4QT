@@ -1474,6 +1474,301 @@ std::vector<PageItemModel::SearchResult> PageItemModel::searchText(const QString
     return results;
 }
 
+std::vector<PageItemModel::SearchResult> PageItemModel::searchTextRegex(const QRegularExpression& regex) const
+{
+    std::vector<SearchResult> results;
+
+    if (!regex.isValid())
+    {
+        return results;
+    }
+
+    // Search through all documents
+    for (const auto& [docIndex, docItem] : m_documents)
+    {
+        const pdf::PDFDocument& document = docItem.document;
+        const pdf::PDFCatalog* catalog = document.getCatalog();
+
+        if (!catalog)
+        {
+            continue;
+        }
+
+        // Use PDFDocumentTextFlowFactory to extract text safely
+        pdf::PDFDocumentTextFlowFactory factory;
+        factory.setCalculateBoundingBoxes(true);
+
+        // Create text flow for the entire document using Layout algorithm (reliable, uses docstrum)
+        pdf::PDFDocumentTextFlow textFlow = factory.create(&document, pdf::PDFDocumentTextFlowFactory::Algorithm::Layout);
+
+        // Get all items from the text flow
+        const auto& items = textFlow.getItems();
+
+        // Search through each text item
+        for (const auto& item : items)
+        {
+            if (!item.isText())
+            {
+                continue;  // Skip non-text items
+            }
+
+            // Apply regex to this item's text
+            QRegularExpressionMatch match = regex.match(item.text);
+            if (match.hasMatch())
+            {
+                SearchResult searchResult;
+                searchResult.documentIndex = docIndex;
+                searchResult.documentName = docItem.fileName;
+                searchResult.pageNumber = item.pageIndex + 1;  // Convert to 1-based
+                searchResult.matched = match.captured(0);
+
+                // Create context: some text before and after the match
+                const int contextLength = 40;
+                int matchPos = match.capturedStart(0);
+                int matchLen = match.capturedLength(0);
+                int contextStart = qMax(0, matchPos - contextLength);
+                int contextEnd = qMin(item.text.length(), matchPos + matchLen + contextLength);
+                searchResult.context = item.text.mid(contextStart, contextEnd - contextStart);
+
+                // Clean up context (trim whitespace)
+                searchResult.context = searchResult.context.simplified();
+
+                results.push_back(searchResult);
+            }
+        }
+    }
+
+    return results;
+}
+
+QPair<bool, QString> PageItemModel::detectSpecSectionTitle(const QString& section, int documentIndex) const
+{
+    // Find document
+    auto it = m_documents.find(documentIndex);
+    if (it == m_documents.end())
+    {
+        return {false, QString()};
+    }
+
+    const pdf::PDFDocument& document = it->second.document;
+
+    // Extract text flow from entire document
+    pdf::PDFDocumentTextFlowFactory factory;
+    factory.setCalculateBoundingBoxes(true);
+    pdf::PDFDocumentTextFlow textFlow = factory.create(&document, pdf::PDFDocumentTextFlowFactory::Algorithm::Layout);
+
+    // Generate search variants for section number
+    QStringList variants = generateSearchVariants(section);
+
+    // Track title candidates with confidence scores
+    struct Candidate {
+        QString title;
+        int confidence = 0;
+    };
+    std::vector<Candidate> candidates;
+
+    const auto& items = textFlow.getItems();
+
+    // Search for section number in text
+    for (size_t i = 0; i < items.size(); ++i)
+    {
+        const auto& item = items[i];
+        if (!item.isText())
+        {
+            continue;
+        }
+
+        // Check if this item contains any variant of the section number
+        bool found = false;
+        for (const QString& variant : variants)
+        {
+            if (item.text.contains(variant, Qt::CaseInsensitive))
+            {
+                found = true;
+                break;
+            }
+        }
+
+        if (!found)
+        {
+            continue;
+        }
+
+        // Pattern 0: Extract title from same line as section number
+        // Works for both "SECTION XX XXXX TITLE" and just "XX XXXX TITLE"
+        QString text = item.text;
+
+        // Try each variant to see if it appears in this text item
+        for (const QString& variant : variants)
+        {
+            int pos = text.indexOf(variant, 0, Qt::CaseInsensitive);
+            if (pos >= 0)
+            {
+                // Extract everything after the section number
+                int endPos = pos + variant.length();
+                QString afterSection = text.mid(endPos).trimmed();
+
+                // Remove common prefixes that might appear before the title
+                afterSection.remove(QRegularExpression("^[\\-\\:]+\\s*"));
+
+                // If there's substantial text after the section number, it's likely the title
+                if (afterSection.length() >= 5 && afterSection.length() <= 100)
+                {
+                    // Skip if it's just numbers (like a page number)
+                    QRegularExpression allNumbers("^\\d+$");
+                    if (allNumbers.match(afterSection).hasMatch())
+                    {
+                        continue;
+                    }
+
+                    Candidate c;
+                    c.title = afterSection;
+
+                    // Higher confidence if "SECTION" keyword is present
+                    if (text.contains("SECTION", Qt::CaseInsensitive))
+                    {
+                        c.confidence = 95;
+                    }
+                    else
+                    {
+                        c.confidence = 85;
+                    }
+
+                    // Bonus if it's all caps
+                    if (afterSection == afterSection.toUpper() && afterSection.length() > 2)
+                    {
+                        c.confidence += 5;
+                    }
+
+                    candidates.push_back(c);
+                }
+                break;  // Found this variant, move to next text item
+            }
+        }
+
+        // Pattern 1: "SECTION" on current line, title on next line(s)
+        if (item.text.contains("SECTION", Qt::CaseInsensitive))
+        {
+            // Look at next few items for the title
+            for (size_t j = i + 1; j < qMin(i + 5, items.size()); ++j)
+            {
+                if (!items[j].isText())
+                {
+                    continue;
+                }
+
+                QString candidateTitle = items[j].text.trimmed();
+
+                // Skip if empty or too short
+                if (candidateTitle.length() < 5)
+                {
+                    continue;
+                }
+
+                // Skip if it still contains the section number (it's not the title)
+                bool containsNumber = false;
+                for (const QString& variant : variants)
+                {
+                    if (candidateTitle.contains(variant, Qt::CaseInsensitive))
+                    {
+                        containsNumber = true;
+                        break;
+                    }
+                }
+                if (containsNumber)
+                {
+                    continue;  // Skip - still has section number, not the title
+                }
+
+                // Skip if it's all numbers (like a page number)
+                QRegularExpression allNumbers("^\\d+$");
+                if (allNumbers.match(candidateTitle).hasMatch())
+                {
+                    continue;
+                }
+
+                // This looks like a title - add with high confidence
+                Candidate c;
+                c.title = candidateTitle;
+                c.confidence = 75;
+
+                // Bonus if it's all caps or title case
+                if (candidateTitle == candidateTitle.toUpper())
+                {
+                    c.confidence += 15;
+                }
+
+                candidates.push_back(c);
+                break;  // Found header title, stop looking
+            }
+        }
+
+        // Pattern 2: Section number with title on next line (footer format)
+        // Look at items around this one
+        if (i + 1 < items.size())
+        {
+            const auto& nextItem = items[i + 1];
+            if (nextItem.isText())
+            {
+                QString candidateTitle = nextItem.text.trimmed();
+
+                // Skip if too short or too long
+                if (candidateTitle.length() >= 10 && candidateTitle.length() <= 80)
+                {
+                    // Check if it looks like a title (not a page number, etc.)
+                    bool looksLikeTitle = true;
+
+                    // Skip if it's all numbers
+                    QRegularExpression onlyNumbers("^\\d+$");
+                    if (onlyNumbers.match(candidateTitle).hasMatch())
+                    {
+                        looksLikeTitle = false;
+                    }
+
+                    // Skip if contains section number
+                    for (const QString& variant : variants)
+                    {
+                        if (candidateTitle.contains(variant, Qt::CaseInsensitive))
+                        {
+                            looksLikeTitle = false;
+                            break;
+                        }
+                    }
+
+                    if (looksLikeTitle)
+                    {
+                        Candidate c;
+                        c.title = candidateTitle;
+                        c.confidence = 60;
+
+                        // Bonus for title case
+                        if (candidateTitle[0].isUpper() && candidateTitle != candidateTitle.toUpper())
+                        {
+                            c.confidence += 10;
+                        }
+
+                        candidates.push_back(c);
+                    }
+                }
+            }
+        }
+    }
+
+    // Select best candidate
+    if (candidates.empty())
+    {
+        return {false, QString()};
+    }
+
+    // Sort by confidence (highest first)
+    std::sort(candidates.begin(), candidates.end(),
+        [](const Candidate& a, const Candidate& b) {
+            return a.confidence > b.confidence;
+        });
+
+    return {true, candidates[0].title};
+}
+
 std::vector<PageItemModel::PageRange> PageItemModel::detectPageRanges(const std::vector<SearchResult>& results) const
 {
     std::vector<PageRange> ranges;
@@ -1716,6 +2011,57 @@ QStringList PageItemModel::generateSearchVariants(const QString& text)
     }
 
     return variants;
+}
+
+QString PageItemModel::generateRegexPattern(const QString& text)
+{
+    QString normalized = normalizeSpecSection(text);
+
+    // Extract division and section from normalized format
+    // Pattern: "23 3600" or "23 36 00"
+    QRegularExpression rx("^(\\d{2,3})\\s+(\\d{2})\\s*(\\d{2,3})$");
+    QRegularExpressionMatch match = rx.match(normalized);
+
+    if (match.hasMatch())
+    {
+        QString division = match.captured(1);
+        QString firstPair = match.captured(2);
+        QString secondPair = match.captured(3);
+
+        // Check for subdivision (e.g., "23 36 00.51")
+        QString subdivision;
+        QRegularExpressionMatch subMatch;
+        QRegularExpression rxSub("^(\\d{2,3})\\s+(\\d{2})\\s+(\\d{2})\\.(\\d{2})$");
+        subMatch = rxSub.match(text.trimmed());
+
+        if (subMatch.hasMatch())
+        {
+            subdivision = subMatch.captured(4);
+        }
+
+        // Build regex pattern
+        // For "23 3600" → split into "23 36 00" → pattern: \b23\s*36\s*00\b
+        if (subdivision.isEmpty())
+        {
+            // Pattern without subdivision: \b23\s*36\s*00\b
+            return QString("\\b%1\\s*%2\\s*%3\\b")
+                .arg(division)
+                .arg(firstPair)
+                .arg(secondPair);
+        }
+        else
+        {
+            // Pattern with optional subdivision: \b23\s*36\s*00(?:\.51)?\b
+            return QString("\\b%1\\s*%2\\s*%3(?:\\.%4)?\\b")
+                .arg(division)
+                .arg(firstPair)
+                .arg(secondPair)
+                .arg(subdivision);
+        }
+    }
+
+    // Fallback: escape the text and use as literal pattern
+    return QRegularExpression::escape(text);
 }
 
 }   // namespace pdfpagemaster

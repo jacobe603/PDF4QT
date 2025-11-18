@@ -636,6 +636,15 @@ void MainWindow::performOperation(Operation operation)
         case Operation::DiscoverSections:
         {
             DiscoverSectionsDialog discoverDialog(m_model, this);
+
+            // Connect signal to open Batch Search Dialog with selected sections
+            connect(&discoverDialog, &DiscoverSectionsDialog::sectionsSelected,
+                    this, [this](const QStringList& sections) {
+                        BatchSearchDialog batchDialog(m_model, this);
+                        batchDialog.addSections(sections);
+                        batchDialog.exec();
+                    });
+
             discoverDialog.exec();
             break;
         }

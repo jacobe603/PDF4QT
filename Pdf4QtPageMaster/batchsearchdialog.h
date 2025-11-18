@@ -46,6 +46,9 @@ public:
     explicit BatchSearchDialog(PageItemModel* model, QWidget* parent);
     virtual ~BatchSearchDialog() override;
 
+    // Add sections from external source (e.g., Discovery Dialog)
+    void addSections(const QStringList& sections);
+
 private slots:
     void onAddSectionClicked();
     void onEditSectionClicked();
@@ -55,6 +58,8 @@ private slots:
     void onSectionSelectionChanged();
     void onSearchAllClicked();
     void onExtractSelectedClicked();
+    void onSectionsContextMenu(const QPoint& pos);
+    void onDetectTitleRequested();
 
 private:
     struct SectionSearchResult

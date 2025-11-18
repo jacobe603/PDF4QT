@@ -27,6 +27,8 @@ add_executable(Pdf4QtPageMaster
     assembleoutputsettingsdialog.h
     batchsearchdialog.cpp
     batchsearchdialog.h
+    detectsectiontitledialog.cpp
+    detectsectiontitledialog.h
     discoversectionsdialog.cpp
     discoversectionsdialog.h
     main.cpp
@@ -45,6 +47,7 @@ add_executable(Pdf4QtPageMaster
     aboutdialog.ui
     assembleoutputsettingsdialog.ui
     batchsearchdialog.ui
+    detectsectiontitledialog.ui
     discoversectionsdialog.ui
     mainwindow.ui
     searchdialog.ui

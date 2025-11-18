@@ -113,12 +113,19 @@
      </property>
      <layout class="QVBoxLayout" name="searchOptionsLayout">
       <item>
-       <widget class="QRadioButton" name="searchVariantsRadioButton">
+       <widget class="QRadioButton" name="regexSearchRadioButton">
         <property name="text">
-         <string>Search all pattern variants (233600, 23 3600, 23-3600, 23_3600, 23 36 00)</string>
+         <string>Regex search (fast, finds all formatting variants)</string>
         </property>
         <property name="checked">
          <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QRadioButton" name="searchVariantsRadioButton">
+        <property name="text">
+         <string>Search all pattern variants (233600, 23 3600, 23-3600, 23_3600, 23 36 00)</string>
         </property>
        </widget>
       </item>
