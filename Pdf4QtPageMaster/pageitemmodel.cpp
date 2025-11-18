@@ -1541,6 +1541,60 @@ std::vector<PageItemModel::SearchResult> PageItemModel::searchTextRegex(const QR
     return results;
 }
 
+int PageItemModel::findPageGroupRow(int documentIndex, pdf::PDFInteger pageIndex) const
+{
+    for (int row = 0; row < static_cast<int>(m_pageGroupItems.size()); ++row)
+    {
+        const PageGroupItem& item = m_pageGroupItems[row];
+
+        for (const PageGroupItem::GroupItem& group : item.groups)
+        {
+            if (group.documentIndex == documentIndex && group.pageIndex == pageIndex)
+            {
+                return row;
+            }
+        }
+    }
+
+    return -1;  // Not found
+}
+
+void PageItemModel::setGroupPreviewPage(const QModelIndex& index, int documentIndex, pdf::PDFInteger pageIndex)
+{
+    if (!index.isValid() || index.row() >= static_cast<int>(m_pageGroupItems.size()))
+    {
+        return;
+    }
+
+    PageGroupItem& item = m_pageGroupItems[index.row()];
+
+    // Find the matching group item
+    for (size_t i = 0; i < item.groups.size(); ++i)
+    {
+        const PageGroupItem::GroupItem& group = item.groups[i];
+        if (group.documentIndex == documentIndex && group.pageIndex == pageIndex)
+        {
+            if (item.previewPageIndex != i)
+            {
+                item.previewPageIndex = i;
+                // Invalidate cache and notify view to repaint
+                Q_EMIT dataChanged(index, index);
+            }
+            return;
+        }
+    }
+}
+
+const PageGroupItem* PageItemModel::getPageGroupItem(const QModelIndex& index) const
+{
+    if (!index.isValid() || index.row() >= static_cast<int>(m_pageGroupItems.size()))
+    {
+        return nullptr;
+    }
+
+    return &m_pageGroupItems[index.row()];
+}
+
 QPair<bool, QString> PageItemModel::detectSpecSectionTitle(const QString& section, int documentIndex) const
 {
     // Find document

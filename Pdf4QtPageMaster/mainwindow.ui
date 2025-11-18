@@ -88,6 +88,9 @@
     <addaction name="actionRotate_Left"/>
     <addaction name="actionRotate_Right"/>
     <addaction name="separator"/>
+    <addaction name="actionPrevious_Page"/>
+    <addaction name="actionNext_Page"/>
+    <addaction name="separator"/>
     <addaction name="actionGroup"/>
     <addaction name="actionUngroup"/>
    </widget>
@@ -427,6 +430,22 @@
    </property>
    <property name="shortcut">
     <string>Shift+F4</string>
+   </property>
+  </action>
+  <action name="actionNext_Page">
+   <property name="text">
+    <string>&amp;Next Page</string>
+   </property>
+   <property name="shortcut">
+    <string>PgDown</string>
+   </property>
+  </action>
+  <action name="actionPrevious_Page">
+   <property name="text">
+    <string>&amp;Previous Page</string>
+   </property>
+   <property name="shortcut">
+    <string>PgUp</string>
    </property>
   </action>
   <action name="actionZoom_In">

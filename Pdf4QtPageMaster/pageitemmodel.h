@@ -64,6 +64,7 @@ struct PageGroupItem
     };
 
     std::vector<GroupItem> groups;
+    size_t previewPageIndex = 0; ///< Index into groups vector for preview display
 
     auto operator<=>(const PageGroupItem&) const = default;
 
@@ -207,6 +208,23 @@ public:
     std::vector<SearchResult> searchTextRegex(const QRegularExpression& regex) const;
     std::vector<PageRange> detectPageRanges(const std::vector<SearchResult>& results) const;
     bool extractPageRange(int documentIndex, pdf::PDFInteger firstPage, pdf::PDFInteger lastPage, const QString& outputPath, QString& errorMessage) const;
+
+    /// Find the model row containing a specific document page
+    /// @param documentIndex Document index to search for
+    /// @param pageIndex 1-based page index within the document
+    /// @return Model row index, or -1 if not found
+    int findPageGroupRow(int documentIndex, pdf::PDFInteger pageIndex) const;
+
+    /// Set which page in a group should be displayed as the preview
+    /// @param index Model index of the page group item
+    /// @param documentIndex Document index of the page to preview
+    /// @param pageIndex 1-based page index of the page to preview
+    void setGroupPreviewPage(const QModelIndex& index, int documentIndex, pdf::PDFInteger pageIndex);
+
+    /// Get page group item at given model index
+    /// @param index Model index
+    /// @return Pointer to PageGroupItem, or nullptr if invalid
+    const PageGroupItem* getPageGroupItem(const QModelIndex& index) const;
 
     /// Detect spec section title from PDF content
     /// Searches for section number in document and analyzes surrounding text to extract title

@@ -86,6 +86,8 @@ MainWindow::MainWindow(QWidget* parent) :
     ui->actionDiscoverSections->setData(int(Operation::DiscoverSections));
     ui->actionRotate_Left->setData(int(Operation::RotateLeft));
     ui->actionRotate_Right->setData(int(Operation::RotateRight));
+    ui->actionNext_Page->setData(int(Operation::NextPage));
+    ui->actionPrevious_Page->setData(int(Operation::PreviousPage));
     ui->actionGroup->setData(int(Operation::Group));
     ui->actionUngroup->setData(int(Operation::Ungroup));
     ui->actionSelect_None->setData(int(Operation::SelectNone));
@@ -170,6 +172,10 @@ MainWindow::MainWindow(QWidget* parent) :
     mainToolbar->addActions({ ui->actionCut, ui->actionCopy, ui->actionPaste });
     mainToolbar->addSeparator();
     mainToolbar->addActions({ ui->actionGroup, ui->actionUngroup });
+    mainToolbar->addSeparator();
+    mainToolbar->addActions({ ui->actionRotate_Left, ui->actionRotate_Right });
+    mainToolbar->addSeparator();
+    mainToolbar->addActions({ ui->actionPrevious_Page, ui->actionNext_Page });
     QToolBar* insertToolbar = addToolBar(tr("&Insert"));
     insertToolbar->setObjectName("insert_toolbar");
     insertToolbar->addActions({ ui->actionInsert_PDF, ui->actionInsert_Image, ui->actionInsert_Empty_Page });
@@ -526,6 +532,10 @@ bool MainWindow::canPerformOperation(Operation operation) const
             return info.isTwoDocuments();
         }
 
+        case Operation::NextPage:
+        case Operation::PreviousPage:
+            return !isModelEmpty;
+
         default:
             Q_ASSERT(false);
             break;
@@ -629,6 +639,27 @@ void MainWindow::performOperation(Operation operation)
         case Operation::BatchSearchText:
         {
             BatchSearchDialog batchSearchDialog(m_model, this);
+
+            // Connect navigation signal
+            connect(&batchSearchDialog, &BatchSearchDialog::navigateToPage,
+                    this, [this](int docIndex, pdf::PDFInteger pageNum) {
+                        // Find the model row (pageNum is 1-based, findPageGroupRow expects 1-based)
+                        int row = m_model->findPageGroupRow(docIndex, pageNum);
+                        if (row >= 0)
+                        {
+                            QModelIndex index = m_model->index(row, 0, QModelIndex());
+
+                            // Update which page is shown as preview
+                            m_model->setGroupPreviewPage(index, docIndex, pageNum);
+
+                            // Select and scroll to page
+                            ui->documentItemsView->selectionModel()->select(
+                                index, QItemSelectionModel::ClearAndSelect);
+                            ui->documentItemsView->scrollTo(index,
+                                QAbstractItemView::PositionAtCenter);
+                        }
+                    });
+
             batchSearchDialog.exec();
             break;
         }
@@ -637,11 +668,52 @@ void MainWindow::performOperation(Operation operation)
         {
             DiscoverSectionsDialog discoverDialog(m_model, this);
 
+            // Connect navigation signal for double-click
+            connect(&discoverDialog, &DiscoverSectionsDialog::navigateToPage,
+                    this, [this](int docIndex, pdf::PDFInteger pageNum) {
+                        // Find the model row (pageNum is 1-based, findPageGroupRow expects 1-based)
+                        int row = m_model->findPageGroupRow(docIndex, pageNum);
+                        if (row >= 0)
+                        {
+                            QModelIndex index = m_model->index(row, 0, QModelIndex());
+
+                            // Update which page is shown as preview
+                            m_model->setGroupPreviewPage(index, docIndex, pageNum);
+
+                            // Select and scroll to page
+                            ui->documentItemsView->selectionModel()->select(
+                                index, QItemSelectionModel::ClearAndSelect);
+                            ui->documentItemsView->scrollTo(index,
+                                QAbstractItemView::PositionAtCenter);
+                        }
+                    });
+
             // Connect signal to open Batch Search Dialog with selected sections
             connect(&discoverDialog, &DiscoverSectionsDialog::sectionsSelected,
                     this, [this](const QStringList& sections) {
                         BatchSearchDialog batchDialog(m_model, this);
                         batchDialog.addSections(sections);
+
+                        // Connect navigation signal
+                        connect(&batchDialog, &BatchSearchDialog::navigateToPage,
+                                this, [this](int docIndex, pdf::PDFInteger pageNum) {
+                                    // Find the model row (pageNum is 1-based, findPageGroupRow expects 1-based)
+                                    int row = m_model->findPageGroupRow(docIndex, pageNum);
+                                    if (row >= 0)
+                                    {
+                                        QModelIndex index = m_model->index(row, 0, QModelIndex());
+
+                                        // Update which page is shown as preview
+                                        m_model->setGroupPreviewPage(index, docIndex, pageNum);
+
+                                        // Select and scroll to page
+                                        ui->documentItemsView->selectionModel()->select(
+                                            index, QItemSelectionModel::ClearAndSelect);
+                                        ui->documentItemsView->scrollTo(index,
+                                            QAbstractItemView::PositionAtCenter);
+                                    }
+                                });
+
                         batchDialog.exec();
                     });
 
@@ -714,6 +786,52 @@ void MainWindow::performOperation(Operation operation)
         case Operation::RotateRight:
             m_model->rotateRight(ui->documentItemsView->selectionModel()->selection().indexes());
             break;
+
+        case Operation::NextPage:
+        {
+            QModelIndexList selection = ui->documentItemsView->selectionModel()->selectedIndexes();
+            int currentRow = selection.isEmpty() ? -1 : selection.first().row();
+            int nextRow = currentRow + 1;
+            if (nextRow < m_model->rowCount(QModelIndex()))
+            {
+                QModelIndex index = m_model->index(nextRow, 0, QModelIndex());
+
+                // Update preview to show first page of this group
+                const PageGroupItem* item = m_model->getPageGroupItem(index);
+                if (item && !item->groups.empty())
+                {
+                    const auto& firstGroup = item->groups.front();
+                    m_model->setGroupPreviewPage(index, firstGroup.documentIndex, firstGroup.pageIndex);
+                }
+
+                ui->documentItemsView->selectionModel()->select(index, QItemSelectionModel::ClearAndSelect);
+                ui->documentItemsView->scrollTo(index, QAbstractItemView::PositionAtCenter);
+            }
+            break;
+        }
+
+        case Operation::PreviousPage:
+        {
+            QModelIndexList selection = ui->documentItemsView->selectionModel()->selectedIndexes();
+            int currentRow = selection.isEmpty() ? 0 : selection.first().row();
+            int previousRow = currentRow - 1;
+            if (previousRow >= 0)
+            {
+                QModelIndex index = m_model->index(previousRow, 0, QModelIndex());
+
+                // Update preview to show first page of this group
+                const PageGroupItem* item = m_model->getPageGroupItem(index);
+                if (item && !item->groups.empty())
+                {
+                    const auto& firstGroup = item->groups.front();
+                    m_model->setGroupPreviewPage(index, firstGroup.documentIndex, firstGroup.pageIndex);
+                }
+
+                ui->documentItemsView->selectionModel()->select(index, QItemSelectionModel::ClearAndSelect);
+                ui->documentItemsView->scrollTo(index, QAbstractItemView::PositionAtCenter);
+            }
+            break;
+        }
 
         case Operation::GetSource:
             QDesktopServices::openUrl(QUrl("https://github.com/JakubMelka/PDF4QT"));

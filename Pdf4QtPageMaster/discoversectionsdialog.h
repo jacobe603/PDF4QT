@@ -28,6 +28,8 @@
 #include <QDialog>
 #include <QMap>
 
+class QListWidgetItem;
+
 namespace Ui
 {
 class DiscoverSectionsDialog;
@@ -49,6 +51,7 @@ public:
 
 signals:
     void sectionsSelected(const QStringList& sections);
+    void navigateToPage(int documentIndex, pdf::PDFInteger pageNumber);
 
 private slots:
     void onScanClicked();
@@ -58,6 +61,8 @@ private slots:
     void onSelectNoneClicked();
     void onResultsContextMenu(const QPoint& pos);
     void onDetectTitleRequested();
+    void onEditTitleManually();
+    void onResultItemDoubleClicked(QListWidgetItem* item);
 
 private:
     struct DiscoveredSection
@@ -65,6 +70,8 @@ private:
         QString section;          // Normalized section number
         QString displayText;      // Original format found in document
         int pageCount;            // Number of pages where this section appears
+        int firstDocumentIndex = -1;        // Document index of first occurrence
+        pdf::PDFInteger firstPageNumber = 0; // 1-based page number of first occurrence
     };
 
     void updateButtons();

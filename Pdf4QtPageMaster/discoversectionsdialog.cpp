@@ -30,6 +30,7 @@
 #include <QRegularExpression>
 #include <QSet>
 #include <QMenu>
+#include <QInputDialog>
 
 namespace pdfpagemaster
 {
@@ -45,6 +46,7 @@ DiscoverSectionsDialog::DiscoverSectionsDialog(PageItemModel* model, QWidget* pa
     connect(ui->scanButton, &QPushButton::clicked, this, &DiscoverSectionsDialog::onScanClicked);
     connect(ui->addSelectedButton, &QPushButton::clicked, this, &DiscoverSectionsDialog::onAddSelectedClicked);
     connect(ui->resultsListWidget, &QListWidget::itemSelectionChanged, this, &DiscoverSectionsDialog::onResultsSelectionChanged);
+    connect(ui->resultsListWidget, &QListWidget::itemDoubleClicked, this, &DiscoverSectionsDialog::onResultItemDoubleClicked);
     connect(ui->selectAllButton, &QPushButton::clicked, this, &DiscoverSectionsDialog::onSelectAllClicked);
     connect(ui->selectNoneButton, &QPushButton::clicked, this, &DiscoverSectionsDialog::onSelectNoneClicked);
 
@@ -159,11 +161,13 @@ void DiscoverSectionsDialog::scanDocuments()
             {
                 sectionPages[normalized] = QSet<int>();
 
-                // Store the first occurrence's display text
+                // Store the first occurrence's display text and location
                 DiscoveredSection section;
                 section.section = normalized;
                 section.displayText = foundText;
                 section.pageCount = 0;
+                section.firstDocumentIndex = result.documentIndex;
+                section.firstPageNumber = result.pageNumber;  // Already 1-based from search results
                 m_discoveredSections[normalized] = section;
             }
 
@@ -286,11 +290,16 @@ void DiscoverSectionsDialog::onResultsContextMenu(const QPoint& pos)
 
     QMenu menu(this);
     QAction* detectAction = menu.addAction(tr("Detect Title from PDF..."));
+    QAction* editAction = menu.addAction(tr("Edit Title Manually..."));
 
     QAction* selected = menu.exec(ui->resultsListWidget->mapToGlobal(pos));
     if (selected == detectAction)
     {
         onDetectTitleRequested();
+    }
+    else if (selected == editAction)
+    {
+        onEditTitleManually();
     }
 }
 
@@ -383,6 +392,89 @@ void DiscoverSectionsDialog::onDetectTitleRequested()
                 tr("The custom title has been saved for this section."));
         }
     }
+}
+
+void DiscoverSectionsDialog::onEditTitleManually()
+{
+    // Get selected item
+    QListWidgetItem* item = ui->resultsListWidget->currentItem();
+    if (!item)
+    {
+        return;
+    }
+
+    // Get section number from UserRole
+    QString section = item->data(Qt::UserRole).toString();
+    if (section.isEmpty())
+    {
+        return;
+    }
+
+    // Get current title if it exists
+    QString currentTitle = SpecSectionDatabase::instance().getTitle(section);
+
+    // Show input dialog for manual entry
+    bool ok;
+    QString newTitle = QInputDialog::getText(this, tr("Edit Section Title"),
+        tr("Enter title for section %1:").arg(section),
+        QLineEdit::Normal,
+        currentTitle,
+        &ok);
+
+    if (ok && !newTitle.isEmpty())
+    {
+        // Save custom title
+        SpecSectionDatabase::instance().setCustomTitle(section, newTitle);
+
+        // Find the discovered section to get page count
+        QString normalized = PageItemModel::normalizeSpecSection(section);
+        if (m_discoveredSections.contains(normalized))
+        {
+            const DiscoveredSection& discoveredSection = m_discoveredSections[normalized];
+
+            // Update display text with page count
+            QString displayText = tr("%1 - %2 (%3 pages)")
+                .arg(section)
+                .arg(newTitle)
+                .arg(discoveredSection.pageCount);
+
+            item->setText(displayText);
+        }
+        else
+        {
+            // Fallback without page count
+            QString displayText = section + " - " + newTitle;
+            item->setText(displayText);
+        }
+
+        QMessageBox::information(this, tr("Title Saved"),
+            tr("The custom title has been saved for this section."));
+    }
+}
+
+void DiscoverSectionsDialog::onResultItemDoubleClicked(QListWidgetItem* item)
+{
+    if (!item)
+    {
+        return;
+    }
+
+    // Get the section from the item's user data
+    QString section = item->data(Qt::UserRole).toString();
+    if (section.isEmpty())
+    {
+        return;
+    }
+
+    // Find the discovered section
+    auto it = m_discoveredSections.find(section);
+    if (it == m_discoveredSections.end() || it.value().firstDocumentIndex < 0)
+    {
+        return;  // Not found or no location data
+    }
+
+    // Emit signal to navigate to the first occurrence
+    navigateToPage(it.value().firstDocumentIndex, it.value().firstPageNumber);
 }
 
 }   // namespace pdfpagemaster

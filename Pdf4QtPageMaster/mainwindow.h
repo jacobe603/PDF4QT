@@ -76,6 +76,9 @@ public:
         RotateLeft,
         RotateRight,
 
+        NextPage,
+        PreviousPage,
+
         Group,
         Ungroup,
 

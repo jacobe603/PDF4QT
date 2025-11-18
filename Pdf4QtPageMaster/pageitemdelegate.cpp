@@ -69,7 +69,7 @@ void PageItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opti
     // Draw page preview
     if (!item->groups.empty())
     {
-        const PageGroupItem::GroupItem& groupItem = item->groups.front();
+        const PageGroupItem::GroupItem& groupItem = item->groups[item->previewPageIndex];
         QSizeF rotatedPageSize = pdf::PDFPage::getRotatedBox(QRectF(QPointF(0, 0), groupItem.rotatedPageDimensionsMM), groupItem.pageAdditionalRotation).size();
         QSize pageImageSize = rotatedPageSize.scaled(pageBoundingRect.size(), Qt::KeepAspectRatio).toSize();
         QRect pageImageRect(pageBoundingRect.topLeft() + QPoint((pageBoundingRect.width() - pageImageSize.width()) / 2, (pageBoundingRect.height() - pageImageSize.height()) / 2), pageImageSize);
@@ -153,7 +153,7 @@ QPixmap PageItemDelegate::getPageImagePixmap(const PageGroupItem* item, QRect re
         return pixmap;
     }
 
-    const PageGroupItem::GroupItem& groupItem = item->groups.front();
+    const PageGroupItem::GroupItem& groupItem = item->groups[item->previewPageIndex];
     if (groupItem.pageType == PT_Empty)
     {
         return pixmap;

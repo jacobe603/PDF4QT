@@ -576,4 +576,51 @@ Issue #XXX: [Phase 1] Add basic text search to PageMaster
 
 ---
 
-**Last Updated**: 2025-11-14 by Claude
+### Session 6 (2025-11-18)
+**What We Did**:
+- ✅ **Completed Navigation and Preview Enhancements** for discovered spec sections
+- Fixed grouped PDF preview updates when navigating with Previous/Next buttons
+  - Added `previewPageIndex` field to PageGroupItem struct
+  - Implemented `setGroupPreviewPage()` method to update which page is shown in grouped thumbnails
+  - Modified `getPageImagePixmap()` cache key generation to use preview page
+  - Added `getPageGroupItem()` helper method
+- Fixed off-by-one navigation error (pages were off by 1)
+  - Corrected lambda handlers to pass 1-based page numbers correctly
+  - Updated documentation for `findPageGroupRow()` to specify 1-based indexing
+- Added double-click navigation to Discover Sections dialog
+  - Enhanced DiscoveredSection struct to store first occurrence location
+  - Modified `scanDocuments()` to capture document index and page number
+  - Implemented `onResultItemDoubleClicked()` slot to emit navigation signal
+  - Connected navigation signal in MainWindow DiscoverSections handler
+- Added manual "Edit Title Manually..." menu item to Discover Sections context menu
+  - Added QInputDialog-based title editing alongside auto-detection
+  - Allows direct title entry without PDF content analysis
+  - Saves to custom titles database and updates display with page count
+
+**Files Modified**:
+1. `pageitemmodel.h` - Added previewPageIndex, setGroupPreviewPage(), getPageGroupItem()
+2. `pageitemmodel.cpp` - Implemented preview page methods
+3. `pageitemdelegate.cpp` - Fixed cache key to use preview page index
+4. `mainwindow.cpp` - Fixed off-by-one error, added preview updates for Previous/Next, connected Discover navigation
+5. `discoversectionsdialog.h` - Added navigateToPage signal, onResultItemDoubleClicked/onEditTitleManually slots
+6. `discoversectionsdialog.cpp` - Implemented double-click navigation and manual title editing with QInputDialog
+
+**Key Learnings**:
+- QMap iterators use `.value()` to access value, not `->` operator
+- PageGroupItem is in `pdfpagemaster` namespace, not nested in PageItemModel
+- Forward declarations needed for slot parameters (QListWidgetItem)
+- Preview updates require both changing previewPageIndex AND invalidating cache
+- Navigation patterns: findPageGroupRow() → setGroupPreviewPage() → select() → scrollTo()
+
+**User Experience Improvements**:
+- Previous/Next buttons now update grouped PDF previews correctly
+- Double-clicking discovered sections navigates to first occurrence in document
+- Manual title editing provides escape hatch when auto-detection fails
+- All navigation features work consistently across Batch Search and Discover Sections
+
+**Next Session Start Here**:
+→ Continue with Phases 3-5 or add more navigation/UX features
+
+---
+
+**Last Updated**: 2025-11-18 by Claude

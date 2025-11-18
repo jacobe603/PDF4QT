@@ -49,6 +49,9 @@ public:
     // Add sections from external source (e.g., Discovery Dialog)
     void addSections(const QStringList& sections);
 
+signals:
+    void navigateToPage(int documentIndex, pdf::PDFInteger pageNumber);
+
 private slots:
     void onAddSectionClicked();
     void onEditSectionClicked();
@@ -60,6 +63,7 @@ private slots:
     void onExtractSelectedClicked();
     void onSectionsContextMenu(const QPoint& pos);
     void onDetectTitleRequested();
+    void onResultItemDoubleClicked(QListWidgetItem* item);
 
 private:
     struct SectionSearchResult

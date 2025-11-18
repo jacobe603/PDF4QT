@@ -66,6 +66,9 @@ BatchSearchDialog::BatchSearchDialog(PageItemModel* model, QWidget* parent) :
     connect(ui->sectionsListWidget, &QWidget::customContextMenuRequested,
             this, &BatchSearchDialog::onSectionsContextMenu);
 
+    // Connect results list widget signals for navigation
+    connect(ui->resultsListWidget, &QListWidget::itemDoubleClicked, this, &BatchSearchDialog::onResultItemDoubleClicked);
+
     updateButtons();
 }
 
@@ -812,6 +815,41 @@ void BatchSearchDialog::onDetectTitleRequested()
                 tr("The custom title has been saved for this section."));
         }
     }
+}
+
+void BatchSearchDialog::onResultItemDoubleClicked(QListWidgetItem* item)
+{
+    if (!item)
+    {
+        return;
+    }
+
+    // Get the stored section and range indices
+    QVariantMap data = item->data(Qt::UserRole).toMap();
+    if (data.isEmpty())
+    {
+        return;  // Header item or "No results" item
+    }
+
+    int sectionIndex = data["sectionIndex"].toInt();
+    int rangeIndex = data["rangeIndex"].toInt();
+
+    // Validate indices
+    if (sectionIndex < 0 || sectionIndex >= static_cast<int>(m_searchResults.size()))
+    {
+        return;
+    }
+
+    const auto& sectionResult = m_searchResults[sectionIndex];
+    if (rangeIndex < 0 || rangeIndex >= static_cast<int>(sectionResult.ranges.size()))
+    {
+        return;
+    }
+
+    const PageItemModel::PageRange& range = sectionResult.ranges[rangeIndex];
+
+    // Emit signal to navigate to the first page of this range
+    navigateToPage(range.documentIndex, range.firstPage);
 }
 
 }   // namespace pdfpagemaster
