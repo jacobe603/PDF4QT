@@ -1578,7 +1578,7 @@ void PageItemModel::setGroupPreviewPage(const QModelIndex& index, int documentIn
             {
                 item.previewPageIndex = i;
                 // Invalidate cache and notify view to repaint
-                Q_EMIT dataChanged(index, index);
+                Q_EMIT dataChanged(index, index, {Qt::DecorationRole});
             }
             return;
         }

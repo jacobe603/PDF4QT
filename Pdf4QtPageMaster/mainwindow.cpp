@@ -790,22 +790,18 @@ void MainWindow::performOperation(Operation operation)
         case Operation::NextPage:
         {
             QModelIndexList selection = ui->documentItemsView->selectionModel()->selectedIndexes();
-            int currentRow = selection.isEmpty() ? -1 : selection.first().row();
-            int nextRow = currentRow + 1;
-            if (nextRow < m_model->rowCount(QModelIndex()))
+            if (!selection.isEmpty())
             {
-                QModelIndex index = m_model->index(nextRow, 0, QModelIndex());
+                QModelIndex currentIndex = selection.first();
+                const PageGroupItem* item = m_model->getPageGroupItem(currentIndex);
 
-                // Update preview to show first page of this group
-                const PageGroupItem* item = m_model->getPageGroupItem(index);
                 if (item && !item->groups.empty())
                 {
-                    const auto& firstGroup = item->groups.front();
-                    m_model->setGroupPreviewPage(index, firstGroup.documentIndex, firstGroup.pageIndex);
+                    // Cycle to next page within the current group
+                    size_t nextPageIndex = (item->previewPageIndex + 1) % item->groups.size();
+                    const auto& nextPage = item->groups[nextPageIndex];
+                    m_model->setGroupPreviewPage(currentIndex, nextPage.documentIndex, nextPage.pageIndex);
                 }
-
-                ui->documentItemsView->selectionModel()->select(index, QItemSelectionModel::ClearAndSelect);
-                ui->documentItemsView->scrollTo(index, QAbstractItemView::PositionAtCenter);
             }
             break;
         }
@@ -813,22 +809,20 @@ void MainWindow::performOperation(Operation operation)
         case Operation::PreviousPage:
         {
             QModelIndexList selection = ui->documentItemsView->selectionModel()->selectedIndexes();
-            int currentRow = selection.isEmpty() ? 0 : selection.first().row();
-            int previousRow = currentRow - 1;
-            if (previousRow >= 0)
+            if (!selection.isEmpty())
             {
-                QModelIndex index = m_model->index(previousRow, 0, QModelIndex());
+                QModelIndex currentIndex = selection.first();
+                const PageGroupItem* item = m_model->getPageGroupItem(currentIndex);
 
-                // Update preview to show first page of this group
-                const PageGroupItem* item = m_model->getPageGroupItem(index);
                 if (item && !item->groups.empty())
                 {
-                    const auto& firstGroup = item->groups.front();
-                    m_model->setGroupPreviewPage(index, firstGroup.documentIndex, firstGroup.pageIndex);
+                    // Cycle to previous page within the current group
+                    size_t prevPageIndex = (item->previewPageIndex == 0)
+                        ? item->groups.size() - 1
+                        : item->previewPageIndex - 1;
+                    const auto& prevPage = item->groups[prevPageIndex];
+                    m_model->setGroupPreviewPage(currentIndex, prevPage.documentIndex, prevPage.pageIndex);
                 }
-
-                ui->documentItemsView->selectionModel()->select(index, QItemSelectionModel::ClearAndSelect);
-                ui->documentItemsView->scrollTo(index, QAbstractItemView::PositionAtCenter);
             }
             break;
         }
